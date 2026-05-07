@@ -64,6 +64,36 @@ Roles:
 
 `GET /api/product-metadata/{blockchainProductId}`
 
+### Search metadata
+
+`GET /api/product-metadata/search?query=BATCH`
+
+## Batch Metadata
+
+### Create batch metadata
+
+`POST /api/batch-metadata`
+
+```json
+{
+  "blockchainBatchId": 1,
+  "batchNumber": "BATCH-2026-001",
+  "manufacturerName": "Demo Manufacturer",
+  "productionDate": "2026-05-07",
+  "expirationDate": "2027-12-31",
+  "metadataHash": "0x0000000000000000000000000000000000000000000000000000000000000000",
+  "temperatureHash": "0x0000000000000000000000000000000000000000000000000000000000000000"
+}
+```
+
+### List batch metadata
+
+`GET /api/batch-metadata`
+
+### Get batch metadata
+
+`GET /api/batch-metadata/{blockchainBatchId}`
+
 ## Product Events
 
 ### Save transaction event
@@ -81,6 +111,32 @@ Roles:
 ### Get events by product id
 
 `GET /api/product-events/{blockchainProductId}`
+
+## Authentication
+
+### Login by registered wallet
+
+`POST /api/auth/login`
+
+```json
+{
+  "walletAddress": "0x0000000000000000000000000000000000000001"
+}
+```
+
+Returns a simple HMAC JWT for diploma demonstration.
+
+## Analytics
+
+`GET /api/analytics/summary`
+
+Returns metadata count and cached blockchain event counters.
+
+## Audit Logs
+
+`GET /api/audit-logs`
+
+Returns the latest backend audit actions.
 
 ## Important Note
 

@@ -2,12 +2,12 @@ import { useState } from "react";
 import { saveProductEvent } from "../lib/api";
 import { transferProduct, updateStatus } from "../lib/contract";
 import { ResultMessage } from "../components/ResultMessage";
-import type { ProductStatus } from "../types/product";
+import type { ExtendedProductStatus } from "../types/product";
 
 export default function TransferProductPage() {
   const [productId, setProductId] = useState("1");
   const [newOwner, setNewOwner] = useState("");
-  const [status, setStatus] = useState<ProductStatus>(2);
+  const [status, setStatus] = useState<ExtendedProductStatus>(2);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -54,7 +54,7 @@ export default function TransferProductPage() {
           <Field label="ID продукта" value={productId} onChange={setProductId} />
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Новый статус</span>
-            <select className="input" value={status} onChange={(event) => setStatus(Number(event.target.value) as ProductStatus)}>
+            <select className="input" value={status} onChange={(event) => setStatus(Number(event.target.value) as ExtendedProductStatus)}>
               <option value={1}>В пути</option>
               <option value={2}>Доставлен</option>
               <option value={3}>Продан</option>

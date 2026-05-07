@@ -1,22 +1,48 @@
 export type ProductStatus = 0 | 1 | 2 | 3;
+export type ExtendedProductStatus = 0 | 1 | 2 | 3 | 4;
 
 export interface Product {
   id: bigint;
+  batchId: bigint;
   name: string;
   manufacturer: string;
   currentOwner: string;
   createdAt: bigint;
-  status: ProductStatus;
+  status: ExtendedProductStatus;
+  blocked: boolean;
+  exists: boolean;
+}
+
+export interface ProductBatch {
+  batchId: bigint;
+  manufacturer: string;
+  productionDate: bigint;
+  expirationDate: bigint;
+  recalled: boolean;
+  temperatureHash: string;
+  metadataHash: string;
   exists: boolean;
 }
 
 export interface ProductHistoryItem {
   timestamp: bigint;
   actor: string;
-  from: string;
-  to: string;
-  status: ProductStatus;
+  previousOwner: string;
+  newOwner: string;
+  status: ExtendedProductStatus;
   action: string;
+  operationId: string;
+}
+
+export interface VerificationResult {
+  authentic: boolean;
+  recalled: boolean;
+  expired: boolean;
+  blocked: boolean;
+  status: ExtendedProductStatus;
+  currentOwner: string;
+  batchId: bigint;
+  expirationDate: bigint;
 }
 
 export interface ProductMetadata {
@@ -26,4 +52,13 @@ export interface ProductMetadata {
   expirationDate: string;
   description: string;
   createdAt: string;
+}
+
+export interface AnalyticsSummary {
+  metadataRecords: number;
+  cachedEvents: number;
+  createdEvents: number;
+  transferEvents: number;
+  statusEvents: number;
+  recallEvents: number;
 }

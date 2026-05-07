@@ -11,9 +11,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductEventService {
     private final ProductEventRepository repository;
+    private final AuditLogService auditLogService;
 
-    public ProductEventService(ProductEventRepository repository) {
+    public ProductEventService(ProductEventRepository repository, AuditLogService auditLogService) {
         this.repository = repository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -22,7 +24,9 @@ public class ProductEventService {
         event.setBlockchainProductId(request.blockchainProductId());
         event.setEventType(request.eventType());
         event.setTransactionHash(request.transactionHash());
-        return toResponse(repository.save(event));
+        ProductEvent saved = repository.save(event);
+        auditLogService.record("frontend", request.eventType(), "BLOCKCHAIN_EVENT", request.blockchainProductId().toString(), request.transactionHash());
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)

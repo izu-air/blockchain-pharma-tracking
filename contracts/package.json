@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "compile": "hardhat compile",
+    "compile:solc": "node scripts/compile-solc.cjs",
     "test": "hardhat test",
     "node": "hardhat node",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
@@ -16,6 +17,7 @@
     "@types/node": "^20.14.11",
     "dotenv": "^16.4.5",
     "hardhat": "^2.22.6",
+    "solc": "^0.8.26",
     "typescript": "^5.5.3"
   },
   "dependencies": {

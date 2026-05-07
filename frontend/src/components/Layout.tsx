@@ -1,4 +1,4 @@
-import { Activity, FilePlus2, History, LayoutDashboard, PackageCheck, Send } from "lucide-react";
+import { Activity, FilePlus2, History, LayoutDashboard, PackageCheck, Send, ShieldAlert } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { WalletConnector } from "./WalletConnector";
 
@@ -6,6 +6,7 @@ const links = [
   { to: "/", label: "Панель", icon: LayoutDashboard },
   { to: "/register", label: "Регистрация", icon: FilePlus2 },
   { to: "/transfer", label: "Передача", icon: Send },
+  { to: "/recall", label: "Отзыв", icon: ShieldAlert },
   { to: "/history", label: "История", icon: History },
   { to: "/verify", label: "Проверка", icon: PackageCheck }
 ];

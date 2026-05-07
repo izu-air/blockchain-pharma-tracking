@@ -27,6 +27,11 @@ public class ProductMetadataController {
         return service.findAll();
     }
 
+    @GetMapping("/search")
+    public List<ProductMetadataResponse> search(@RequestParam String query) {
+        return service.search(query);
+    }
+
     @GetMapping("/{blockchainProductId}")
     public ProductMetadataResponse findByBlockchainProductId(@PathVariable Long blockchainProductId) {
         return service.findByBlockchainProductId(blockchainProductId);

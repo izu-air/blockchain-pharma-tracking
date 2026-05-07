@@ -1,4 +1,4 @@
-import type { ProductMetadata } from "../types/product";
+import type { AnalyticsSummary, ProductMetadata } from "../types/product";
 
 const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080/api";
 
@@ -19,6 +19,28 @@ export async function saveMetadata(payload: {
   }
 
   return response.json() as Promise<ProductMetadata>;
+}
+
+export async function saveBatchMetadata(payload: {
+  blockchainBatchId: number;
+  batchNumber: string;
+  manufacturerName: string;
+  productionDate: string;
+  expirationDate: string;
+  metadataHash: string;
+  temperatureHash: string;
+}) {
+  const response = await fetch(`${apiBaseUrl}/batch-metadata`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok) {
+    throw new Error("Не удалось сохранить метаданные партии.");
+  }
+
+  return response.json();
 }
 
 export async function getMetadata(productId: string) {
@@ -42,4 +64,12 @@ export async function saveProductEvent(payload: {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
   });
+}
+
+export async function getAnalyticsSummary() {
+  const response = await fetch(`${apiBaseUrl}/analytics/summary`);
+  if (!response.ok) {
+    throw new Error("Не удалось загрузить аналитику.");
+  }
+  return response.json() as Promise<AnalyticsSummary>;
 }

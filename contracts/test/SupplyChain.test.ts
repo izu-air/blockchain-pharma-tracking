@@ -1,63 +1,133 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 
+function op(label: string) {
+  return ethers.id(`${label}-${Date.now()}-${Math.random()}`);
+}
+
 describe("SupplyChain", function () {
   async function deployFixture() {
-    const [manufacturer, distributor, pharmacy, consumer] = await ethers.getSigners();
+    const [admin, manufacturer, distributor, pharmacy, regulator, consumer, attacker] = await ethers.getSigners();
     const SupplyChain = await ethers.getContractFactory("SupplyChain");
     const supplyChain = await SupplyChain.deploy();
     await supplyChain.waitForDeployment();
-    return { supplyChain, manufacturer, distributor, pharmacy, consumer };
+
+    const MANUFACTURER_ROLE = await supplyChain.MANUFACTURER_ROLE();
+    const DISTRIBUTOR_ROLE = await supplyChain.DISTRIBUTOR_ROLE();
+    const PHARMACY_ROLE = await supplyChain.PHARMACY_ROLE();
+    const REGULATOR_ROLE = await supplyChain.REGULATOR_ROLE();
+
+    await supplyChain.grantRole(MANUFACTURER_ROLE, manufacturer.address);
+    await supplyChain.grantRole(DISTRIBUTOR_ROLE, distributor.address);
+    await supplyChain.grantRole(PHARMACY_ROLE, pharmacy.address);
+    await supplyChain.grantRole(REGULATOR_ROLE, regulator.address);
+
+    return { supplyChain, admin, manufacturer, distributor, pharmacy, regulator, consumer, attacker };
   }
 
-  it("creates a product", async function () {
-    const { supplyChain, manufacturer } = await deployFixture();
+  async function createBatchAndProduct() {
+    const fixture = await deployFixture();
+    const { supplyChain, manufacturer } = fixture;
+    const now = Math.floor(Date.now() / 1000);
+    const temperatureHash = ethers.id("2-8C temperature log");
+    const metadataHash = ethers.id("batch metadata");
 
-    await expect(supplyChain.createProduct("Aspirin 100mg"))
-      .to.emit(supplyChain, "ProductCreated")
-      .withArgs(1, "Aspirin 100mg", manufacturer.address);
+    await supplyChain.connect(manufacturer).createBatch(now, now + 365 * 24 * 60 * 60, temperatureHash, metadataHash);
+    await supplyChain.connect(manufacturer).createProduct(1, "Paracetamol 500mg");
+    return fixture;
+  }
 
-    const product = await supplyChain.getProduct(1);
-    expect(product.name).to.equal("Aspirin 100mg");
-    expect(product.currentOwner).to.equal(manufacturer.address);
-    expect(product.status).to.equal(0);
+  it("allows only manufacturers to create batches and products", async function () {
+    const { supplyChain, manufacturer, attacker } = await deployFixture();
+    const now = Math.floor(Date.now() / 1000);
+
+    await expect(
+      supplyChain.connect(attacker).createBatch(now, now + 1000, ethers.id("temp"), ethers.id("meta"))
+    ).to.be.reverted;
+
+    await expect(
+      supplyChain.connect(manufacturer).createBatch(now, now + 1000, ethers.id("temp"), ethers.id("meta"))
+    ).to.emit(supplyChain, "BatchCreated");
+
+    await expect(
+      supplyChain.connect(manufacturer).createProduct(1, "Aspirin 100mg")
+    ).to.emit(supplyChain, "ProductCreated");
   });
 
-  it("transfers a product and stores history", async function () {
-    const { supplyChain, distributor } = await deployFixture();
+  it("transfers product only between authorized actors", async function () {
+    const { supplyChain, manufacturer, distributor, consumer } = await createBatchAndProduct();
 
-    await supplyChain.createProduct("Ibuprofen 200mg");
-    await supplyChain.transferProduct(1, distributor.address);
+    await expect(
+      supplyChain.connect(manufacturer).transferProduct(1, consumer.address, op("bad-transfer"))
+    ).to.be.revertedWith("New owner is not an authorized supply actor");
+
+    await expect(
+      supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("transfer"))
+    ).to.emit(supplyChain, "ProductTransferred");
 
     const product = await supplyChain.getProduct(1);
-    const history = await supplyChain.getProductHistory(1);
-
     expect(product.currentOwner).to.equal(distributor.address);
     expect(product.status).to.equal(1);
-    expect(history.length).to.equal(2);
   });
 
-  it("allows delivered product to be sold", async function () {
-    const { supplyChain, distributor, pharmacy } = await deployFixture();
+  it("prevents operation id replay", async function () {
+    const { supplyChain, manufacturer, distributor, pharmacy } = await createBatchAndProduct();
+    const operationId = op("replay");
 
-    await supplyChain.createProduct("Paracetamol 500mg");
-    await supplyChain.transferProduct(1, distributor.address);
-    await supplyChain.connect(distributor).updateStatus(1, 2);
-    await supplyChain.connect(distributor).transferProduct(1, pharmacy.address);
-    await supplyChain.connect(pharmacy).updateStatus(1, 2);
-    await supplyChain.connect(pharmacy).updateStatus(1, 3);
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, operationId);
+
+    await expect(
+      supplyChain.connect(distributor).transferProduct(1, pharmacy.address, operationId)
+    ).to.be.revertedWith("Operation id already used");
+  });
+
+  it("allows only pharmacy to mark product as sold", async function () {
+    const { supplyChain, manufacturer, distributor, pharmacy } = await createBatchAndProduct();
+
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d"));
+    await supplyChain.connect(distributor).updateStatus(1, 2, op("delivered-by-distributor"));
+
+    await expect(
+      supplyChain.connect(distributor).updateStatus(1, 3, op("bad-sale"))
+    ).to.be.revertedWith("Only pharmacy can mark sold");
+
+    await supplyChain.connect(distributor).transferProduct(1, pharmacy.address, op("d-to-p"));
+    await supplyChain.connect(pharmacy).updateStatus(1, 2, op("delivered-by-pharmacy"));
+    await supplyChain.connect(pharmacy).updateStatus(1, 3, op("sold"));
 
     const product = await supplyChain.getProduct(1);
     expect(product.status).to.equal(3);
   });
 
-  it("prevents non-owner transfer", async function () {
-    const { supplyChain, distributor, consumer } = await deployFixture();
+  it("recalls a batch and blocks product sale", async function () {
+    const { supplyChain, manufacturer, distributor, pharmacy, regulator } = await createBatchAndProduct();
 
-    await supplyChain.createProduct("Amoxicillin 250mg");
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d"));
+    await supplyChain.connect(distributor).transferProduct(1, pharmacy.address, op("d-to-p"));
 
     await expect(
-      supplyChain.connect(consumer).transferProduct(1, distributor.address)
-    ).to.be.revertedWith("Only current owner can perform this action");
+      supplyChain.connect(regulator).recallBatch(1, "Temperature violation", op("recall"))
+    ).to.emit(supplyChain, "BatchRecalled");
+
+    await expect(
+      supplyChain.connect(pharmacy).updateStatus(1, 3, op("sale-after-recall"))
+    ).to.be.revertedWith("Product is blocked");
+
+    const verification = await supplyChain.verifyProduct(1);
+    expect(verification.authentic).to.equal(true);
+    expect(verification.recalled).to.equal(true);
+    expect(verification.blocked).to.equal(true);
+  });
+
+  it("returns immutable product history", async function () {
+    const { supplyChain, manufacturer, distributor } = await createBatchAndProduct();
+
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("history-transfer"));
+    const history = await supplyChain.getProductHistory(1);
+
+    expect(history.length).to.equal(2);
+    expect(history[0].action).to.equal("Product created");
+    expect(history[1].previousOwner).to.equal(manufacturer.address);
+    expect(history[1].newOwner).to.equal(distributor.address);
   });
 });

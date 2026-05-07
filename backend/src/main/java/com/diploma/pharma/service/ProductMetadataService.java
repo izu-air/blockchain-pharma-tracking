@@ -13,9 +13,11 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class ProductMetadataService {
     private final ProductMetadataRepository repository;
+    private final AuditLogService auditLogService;
 
-    public ProductMetadataService(ProductMetadataRepository repository) {
+    public ProductMetadataService(ProductMetadataRepository repository, AuditLogService auditLogService) {
         this.repository = repository;
+        this.auditLogService = auditLogService;
     }
 
     @Transactional
@@ -29,7 +31,9 @@ public class ProductMetadataService {
         metadata.setBatchNumber(request.batchNumber());
         metadata.setExpirationDate(request.expirationDate());
         metadata.setDescription(request.description());
-        return toResponse(repository.save(metadata));
+        ProductMetadata saved = repository.save(metadata);
+        auditLogService.record("system", "PRODUCT_METADATA_CREATED", "PRODUCT", request.blockchainProductId().toString(), request.batchNumber());
+        return toResponse(saved);
     }
 
     @Transactional(readOnly = true)
@@ -42,6 +46,14 @@ public class ProductMetadataService {
         return repository.findByBlockchainProductId(blockchainProductId)
                 .map(this::toResponse)
                 .orElseThrow(() -> new ResourceNotFoundException("Product metadata not found"));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductMetadataResponse> search(String query) {
+        return repository.findByBatchNumberContainingIgnoreCaseOrDescriptionContainingIgnoreCase(query, query)
+                .stream()
+                .map(this::toResponse)
+                .toList();
     }
 
     private ProductMetadataResponse toResponse(ProductMetadata metadata) {

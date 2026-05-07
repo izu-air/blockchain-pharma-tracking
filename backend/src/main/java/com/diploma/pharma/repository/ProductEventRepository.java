@@ -6,4 +6,5 @@ import org.springframework.data.jpa.repository.JpaRepository;
 
 public interface ProductEventRepository extends JpaRepository<ProductEvent, Long> {
     List<ProductEvent> findByBlockchainProductIdOrderByCreatedAtDesc(Long blockchainProductId);
+    long countByEventType(String eventType);
 }

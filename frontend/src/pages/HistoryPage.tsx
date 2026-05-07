@@ -2,13 +2,15 @@ import { useState } from "react";
 import { HistoryTimeline } from "../components/HistoryTimeline";
 import { ProductCard } from "../components/ProductCard";
 import { getMetadata } from "../lib/api";
-import { getProduct, getProductHistory } from "../lib/contract";
-import type { Product, ProductHistoryItem, ProductMetadata } from "../types/product";
+import { getBatch, getProduct, getProductHistory, verifyProduct } from "../lib/contract";
+import type { Product, ProductBatch, ProductHistoryItem, ProductMetadata, VerificationResult } from "../types/product";
 
 export default function HistoryPage() {
   const [productId, setProductId] = useState("1");
   const [product, setProduct] = useState<Product | null>(null);
+  const [batch, setBatch] = useState<ProductBatch | null>(null);
   const [metadata, setMetadata] = useState<ProductMetadata | null>(null);
+  const [verification, setVerification] = useState<VerificationResult | null>(null);
   const [history, setHistory] = useState<ProductHistoryItem[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -17,17 +19,23 @@ export default function HistoryPage() {
     setLoading(true);
     setError("");
     try {
-      const [loadedProduct, loadedHistory, loadedMetadata] = await Promise.all([
+      const [loadedProduct, loadedHistory, loadedMetadata, loadedVerification] = await Promise.all([
         getProduct(productId),
         getProductHistory(productId),
-        getMetadata(productId)
+        getMetadata(productId),
+        verifyProduct(productId)
       ]);
+      const loadedBatch = await getBatch(loadedProduct.batchId.toString());
       setProduct(loadedProduct);
+      setBatch(loadedBatch);
       setHistory(loadedHistory);
       setMetadata(loadedMetadata);
+      setVerification(loadedVerification);
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Не удалось загрузить историю");
       setProduct(null);
+      setBatch(null);
+      setVerification(null);
       setHistory([]);
     } finally {
       setLoading(false);
@@ -45,7 +53,7 @@ export default function HistoryPage() {
         {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
       </section>
 
-      {product && <ProductCard product={product} metadata={metadata} />}
+      {product && <ProductCard product={product} metadata={metadata} batch={batch} verification={verification} />}
       <HistoryTimeline history={history} />
     </div>
   );

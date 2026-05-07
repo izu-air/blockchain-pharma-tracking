@@ -19,8 +19,9 @@ export function HistoryTimeline({ history }: { history: ProductHistoryItem[] }) 
             <div className="grid gap-2 text-sm text-stone-700 md:grid-cols-2">
               <span>Статус: {statusLabels[item.status]}</span>
               <span>Участник: {formatAddress(item.actor)}</span>
-              <span>От: {isZeroAddress(item.from) ? "создание" : formatAddress(item.from)}</span>
-              <span>Кому: {formatAddress(item.to)}</span>
+              <span>От: {isZeroAddress(item.previousOwner) ? "создание" : formatAddress(item.previousOwner)}</span>
+              <span>Кому: {formatAddress(item.newOwner)}</span>
+              <span className="md:col-span-2">Operation ID: <span className="font-mono">{item.operationId.slice(0, 14)}...</span></span>
             </div>
           </div>
         ))}
