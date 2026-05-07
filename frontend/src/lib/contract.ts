@@ -9,18 +9,23 @@ export const supplyChainAbi = [
   "function REGULATOR_ROLE() view returns (bytes32)",
   "function hasRole(bytes32 role, address account) view returns (bool)",
   "function createBatch(uint256 productionDate,uint256 expirationDate,bytes32 temperatureHash,bytes32 metadataHash) returns (uint256)",
-  "function createProduct(uint256 batchId,string name) returns (uint256)",
+  "function createProduct(uint256 batchId,string name,string serialNumber) returns (uint256)",
   "function transferProduct(uint256 productId,address newOwner,bytes32 operationId)",
   "function updateStatus(uint256 productId,uint8 newStatus,bytes32 operationId)",
   "function recallBatch(uint256 batchId,string reason,bytes32 operationId)",
-  "function getProduct(uint256 productId) view returns (tuple(uint256 id,uint256 batchId,string name,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
+  "function unrecalledBatch(uint256 batchId,string reason,bytes32 operationId)",
+  "function getProduct(uint256 productId) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
+  "function getProductBySerial(string serialNumber) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
+  "function getProductIdBySerial(string serialNumber) view returns (uint256)",
   "function getBatch(uint256 batchId) view returns (tuple(uint256 batchId,address manufacturer,uint256 productionDate,uint256 expirationDate,bool recalled,bytes32 temperatureHash,bytes32 metadataHash,bool exists))",
   "function getBatchProducts(uint256 batchId) view returns (uint256[])",
   "function getProductHistory(uint256 productId) view returns (tuple(uint256 timestamp,address actor,address previousOwner,address newOwner,uint8 status,string action,bytes32 operationId)[])",
   "function verifyProduct(uint256 productId) view returns (tuple(bool authentic,bool recalled,bool expired,bool blocked,uint8 status,address currentOwner,uint256 batchId,uint256 expirationDate))",
+  "function verifyProductBySerial(string serialNumber) view returns (tuple(bool authentic,bool recalled,bool expired,bool blocked,uint8 status,address currentOwner,uint256 batchId,uint256 expirationDate))",
   "event BatchCreated(uint256 indexed batchId,address indexed manufacturer,uint256 productionDate,uint256 expirationDate,bytes32 temperatureHash,bytes32 metadataHash)",
   "event BatchRecalled(uint256 indexed batchId,address indexed regulator,string reason)",
-  "event ProductCreated(uint256 indexed productId,uint256 indexed batchId,string name,address indexed manufacturer)"
+  "event BatchUnrecalled(uint256 indexed batchId,address indexed regulator,string reason)",
+  "event ProductCreated(uint256 indexed productId,uint256 indexed batchId,string serialNumber,string name,address indexed manufacturer)"
 ];
 
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
@@ -106,9 +111,9 @@ export async function createBatch(productionDate: number, expirationDate: number
   };
 }
 
-export async function createProduct(batchId: string, name: string) {
+export async function createProduct(batchId: string, name: string, serialNumber: string) {
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.createProduct(batchId, name);
+  const tx = await contract.createProduct(batchId, name, serialNumber);
   const receipt = await tx.wait();
   const event = receipt.logs
     .map((log: unknown) => {
@@ -147,9 +152,26 @@ export async function recallBatch(batchId: string, reason: string) {
   return receipt.hash as string;
 }
 
+export async function unrecalledBatch(batchId: string, reason: string) {
+  const contract = await getSupplyChainContract(true);
+  const tx = await contract.unrecalledBatch(batchId, reason, operationId("unrecall"));
+  const receipt = await tx.wait();
+  return receipt.hash as string;
+}
+
 export async function getProduct(productId: string): Promise<Product> {
   const contract = await getSupplyChainContract(false);
   return contract.getProduct(productId);
+}
+
+export async function getProductBySerial(serialNumber: string): Promise<Product> {
+  const contract = await getSupplyChainContract(false);
+  return contract.getProductBySerial(serialNumber);
+}
+
+export async function getProductIdBySerial(serialNumber: string): Promise<bigint> {
+  const contract = await getSupplyChainContract(false);
+  return contract.getProductIdBySerial(serialNumber);
 }
 
 export async function getBatch(batchId: string): Promise<ProductBatch> {
@@ -165,4 +187,9 @@ export async function getProductHistory(productId: string): Promise<ProductHisto
 export async function verifyProduct(productId: string): Promise<VerificationResult> {
   const contract = await getSupplyChainContract(false);
   return contract.verifyProduct(productId);
+}
+
+export async function verifyProductBySerial(serialNumber: string): Promise<VerificationResult> {
+  const contract = await getSupplyChainContract(false);
+  return contract.verifyProductBySerial(serialNumber);
 }

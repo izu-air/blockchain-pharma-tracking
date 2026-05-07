@@ -5,6 +5,7 @@ export interface Product {
   id: bigint;
   batchId: bigint;
   name: string;
+  serialNumber: string;
   manufacturer: string;
   currentOwner: string;
   createdAt: bigint;

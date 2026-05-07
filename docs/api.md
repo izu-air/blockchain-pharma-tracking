@@ -41,6 +41,24 @@ Roles:
 
 `GET /api/users/wallet/{walletAddress}`
 
+## Organizations
+
+### Create organization
+
+`POST /api/organizations`
+
+```json
+{
+  "name": "Demo Distributor LLC",
+  "role": "DISTRIBUTOR",
+  "country": "Kazakhstan"
+}
+```
+
+### List organizations
+
+`GET /api/organizations`
+
 ## Product Metadata
 
 ### Create metadata

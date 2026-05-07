@@ -24,11 +24,17 @@
 - `frontend/src/components/ProductCard.tsx`: product, batch and verification summary.
 - `frontend/src/components/HistoryTimeline.tsx`: immutable product event timeline.
 - `frontend/src/pages/DashboardPage.tsx`: role scenario dashboard and backend analytics.
+- `frontend/src/pages/LoginPage.tsx`: MetaMask-focused login page.
+- `frontend/src/pages/ManufacturerDashboardPage.tsx`: manufacturer workflow dashboard.
+- `frontend/src/pages/DistributorDashboardPage.tsx`: distributor workflow dashboard.
+- `frontend/src/pages/PharmacyDashboardPage.tsx`: pharmacy workflow dashboard.
 - `frontend/src/pages/RegisterProductPage.tsx`: batch and product registration flow.
 - `frontend/src/pages/TransferProductPage.tsx`: product transfer and status update.
 - `frontend/src/pages/RecallPage.tsx`: regulator batch recall.
 - `frontend/src/pages/HistoryPage.tsx`: product history lookup.
 - `frontend/src/pages/VerifyProductPage.tsx`: consumer authenticity verification.
+- `frontend/src/pages/AnalyticsPage.tsx`: backend analytics dashboard.
+- `frontend/src/pages/ProductDetailsPage.tsx`: product details route.
 
 ## backend
 
@@ -36,6 +42,8 @@
 - `service`: business services for metadata, events, JWT, analytics and audit.
 - `repository`: Spring Data JPA repositories.
 - `entity`: JPA entities for users, metadata, batch metadata, cached events and audit logs.
+- `Organization`: stores demo supply-chain organizations.
+- `BlockchainEventIndexerService`: scheduled extension point for blockchain event indexing.
 - `dto`: request/response DTOs with validation.
 - `exception`: centralized exception handling.
 
@@ -49,3 +57,7 @@
 - `deployment-guide.md`: deployment steps.
 - `local-setup.md`: local launch steps.
 - `project-structure.md`: file purpose overview.
+- `diagrams.md`: Mermaid diagrams.
+- `security.md`: security explanation.
+- `on-chain-vs-off-chain.md`: data placement explanation.
+- `testing.md`: verification commands.

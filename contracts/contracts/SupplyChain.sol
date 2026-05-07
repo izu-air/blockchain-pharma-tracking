@@ -33,6 +33,7 @@ contract SupplyChain is AccessControl {
         uint256 id;
         uint256 batchId;
         string name;
+        string serialNumber;
         address manufacturer;
         address currentOwner;
         uint256 createdAt;
@@ -67,6 +68,7 @@ contract SupplyChain is AccessControl {
 
     mapping(uint256 => ProductBatch) private batches;
     mapping(uint256 => Product) private products;
+    mapping(string => uint256) private productIdBySerial;
     mapping(uint256 => uint256[]) private batchProducts;
     mapping(uint256 => ProductHistory[]) private productHistories;
     mapping(bytes32 => bool) private usedOperationIds;
@@ -80,7 +82,8 @@ contract SupplyChain is AccessControl {
         bytes32 metadataHash
     );
     event BatchRecalled(uint256 indexed batchId, address indexed regulator, string reason);
-    event ProductCreated(uint256 indexed productId, uint256 indexed batchId, string name, address indexed manufacturer);
+    event BatchUnrecalled(uint256 indexed batchId, address indexed regulator, string reason);
+    event ProductCreated(uint256 indexed productId, uint256 indexed batchId, string serialNumber, string name, address indexed manufacturer);
     event ProductTransferred(uint256 indexed productId, address indexed from, address indexed to, bytes32 operationId);
     event ProductStatusUpdated(uint256 indexed productId, Status status, address indexed actor, bytes32 operationId);
 
@@ -155,13 +158,15 @@ contract SupplyChain is AccessControl {
         return batchId;
     }
 
-    function createProduct(uint256 batchId, string calldata name)
+    function createProduct(uint256 batchId, string calldata name, string calldata serialNumber)
         external
         onlyRole(MANUFACTURER_ROLE)
         batchExists(batchId)
         returns (uint256)
     {
         require(bytes(name).length > 0, "Product name is required");
+        require(bytes(serialNumber).length > 0, "Serial number is required");
+        require(productIdBySerial[serialNumber] == 0, "Serial number already exists");
         require(batches[batchId].manufacturer == msg.sender, "Only batch manufacturer can add products");
         require(!batches[batchId].recalled, "Batch is recalled");
 
@@ -172,6 +177,7 @@ contract SupplyChain is AccessControl {
             id: productId,
             batchId: batchId,
             name: name,
+            serialNumber: serialNumber,
             manufacturer: msg.sender,
             currentOwner: msg.sender,
             createdAt: block.timestamp,
@@ -179,11 +185,12 @@ contract SupplyChain is AccessControl {
             blocked: false,
             exists: true
         });
+        productIdBySerial[serialNumber] = productId;
         batchProducts[batchId].push(productId);
 
         _appendHistory(productId, msg.sender, address(0), msg.sender, Status.Manufactured, "Product created", bytes32(0));
 
-        emit ProductCreated(productId, batchId, name, msg.sender);
+        emit ProductCreated(productId, batchId, serialNumber, name, msg.sender);
         return productId;
     }
 
@@ -257,6 +264,31 @@ contract SupplyChain is AccessControl {
         emit BatchRecalled(batchId, msg.sender, reason);
     }
 
+    function unrecalledBatch(uint256 batchId, string calldata reason, bytes32 operationId)
+        external
+        onlyRole(REGULATOR_ROLE)
+        batchExists(batchId)
+        uniqueOperation(operationId)
+    {
+        require(batches[batchId].recalled, "Batch is not recalled");
+        require(bytes(reason).length > 0, "Unrecall reason is required");
+
+        batches[batchId].recalled = false;
+
+        uint256[] memory ids = batchProducts[batchId];
+        for (uint256 i = 0; i < ids.length; i++) {
+            Product storage product = products[ids[i]];
+            if (product.exists && product.status == Status.Recalled) {
+                product.blocked = false;
+                product.status = Status.InTransit;
+                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, operationId);
+                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, operationId);
+            }
+        }
+
+        emit BatchUnrecalled(batchId, msg.sender, reason);
+    }
+
     function getProduct(uint256 productId)
         external
         view
@@ -264,6 +296,26 @@ contract SupplyChain is AccessControl {
         returns (Product memory)
     {
         return products[productId];
+    }
+
+    function getProductBySerial(string calldata serialNumber)
+        external
+        view
+        returns (Product memory)
+    {
+        uint256 productId = productIdBySerial[serialNumber];
+        require(productId != 0, "Product does not exist");
+        return products[productId];
+    }
+
+    function getProductIdBySerial(string calldata serialNumber)
+        external
+        view
+        returns (uint256)
+    {
+        uint256 productId = productIdBySerial[serialNumber];
+        require(productId != 0, "Product does not exist");
+        return productId;
     }
 
     function getBatch(uint256 batchId)
@@ -299,6 +351,30 @@ contract SupplyChain is AccessControl {
         productExists(productId)
         returns (VerificationResult memory)
     {
+        Product memory product = products[productId];
+        ProductBatch memory batch = batches[product.batchId];
+        bool expired = block.timestamp > batch.expirationDate;
+
+        return VerificationResult({
+            authentic: product.exists && batch.exists,
+            recalled: batch.recalled || product.status == Status.Recalled,
+            expired: expired,
+            blocked: product.blocked,
+            status: product.status,
+            currentOwner: product.currentOwner,
+            batchId: product.batchId,
+            expirationDate: batch.expirationDate
+        });
+    }
+
+    function verifyProductBySerial(string calldata serialNumber)
+        external
+        view
+        returns (VerificationResult memory)
+    {
+        uint256 productId = productIdBySerial[serialNumber];
+        require(productId != 0, "Product does not exist");
+
         Product memory product = products[productId];
         ProductBatch memory batch = batches[product.batchId];
         bool expired = block.timestamp > batch.expirationDate;

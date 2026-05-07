@@ -1,14 +1,19 @@
-import { Activity, FilePlus2, History, LayoutDashboard, PackageCheck, Send, ShieldAlert } from "lucide-react";
+import { Activity, BarChart3, Factory, FilePlus2, History, LayoutDashboard, LogIn, PackageCheck, Send, ShieldAlert, Store, Truck } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { WalletConnector } from "./WalletConnector";
 
 const links = [
   { to: "/", label: "Панель", icon: LayoutDashboard },
+  { to: "/login", label: "Вход", icon: LogIn },
+  { to: "/manufacturer", label: "Производитель", icon: Factory },
+  { to: "/distributor", label: "Дистрибьютор", icon: Truck },
+  { to: "/pharmacy", label: "Аптека", icon: Store },
   { to: "/register", label: "Регистрация", icon: FilePlus2 },
   { to: "/transfer", label: "Передача", icon: Send },
   { to: "/recall", label: "Отзыв", icon: ShieldAlert },
   { to: "/history", label: "История", icon: History },
-  { to: "/verify", label: "Проверка", icon: PackageCheck }
+  { to: "/verify", label: "Проверка", icon: PackageCheck },
+  { to: "/analytics", label: "Аналитика", icon: BarChart3 }
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {

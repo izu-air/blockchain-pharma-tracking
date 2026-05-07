@@ -51,6 +51,7 @@ struct Product {
     uint256 id;
     uint256 batchId;
     string name;
+    string serialNumber;
     address manufacturer;
     address currentOwner;
     uint256 createdAt;
@@ -82,9 +83,9 @@ Statuses model a simplified supply chain lifecycle.
 
 Creates a product batch. Only `MANUFACTURER_ROLE` can call it.
 
-### createProduct(batchId, name)
+### createProduct(batchId, name, serialNumber)
 
-Creates a new product inside an existing batch. The sender becomes manufacturer and current owner.
+Creates a new product inside an existing batch. The sender becomes manufacturer and current owner. Duplicate serial numbers are rejected.
 
 ### transferProduct(productId, newOwner, operationId)
 
@@ -99,6 +100,10 @@ Updates product status. Only the current owner can call it. Sold products are fi
 ### recallBatch(batchId, reason, operationId)
 
 Regulator recalls a batch. Unsold products from the batch become blocked and receive `Recalled` status.
+
+### unrecalledBatch(batchId, reason, operationId)
+
+Regulator can remove a recall after investigation. Products that were blocked by recall become movable again.
 
 ### getProduct(productId)
 
@@ -121,6 +126,10 @@ Returns consumer verification data:
 - batch id;
 - expiration date.
 
+### verifyProductBySerial(serialNumber)
+
+Consumer-facing verification function used by the QR code flow.
+
 ## Events
 
 - `ProductCreated`
@@ -128,6 +137,7 @@ Returns consumer verification data:
 - `ProductStatusUpdated`
 - `BatchCreated`
 - `BatchRecalled`
+- `BatchUnrecalled`
 
 Events make it easier to show transaction activity in frontend and blockchain explorers.
 
@@ -143,3 +153,4 @@ The contract uses `require` checks to keep business rules simple:
 - product must be delivered before it is sold.
 - recalled products cannot be sold;
 - operation id cannot be reused.
+- serial numbers cannot be duplicated.

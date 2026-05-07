@@ -33,7 +33,7 @@ describe("SupplyChain", function () {
     const metadataHash = ethers.id("batch metadata");
 
     await supplyChain.connect(manufacturer).createBatch(now, now + 365 * 24 * 60 * 60, temperatureHash, metadataHash);
-    await supplyChain.connect(manufacturer).createProduct(1, "Paracetamol 500mg");
+    await supplyChain.connect(manufacturer).createProduct(1, "Paracetamol 500mg", "SN-DEMO-001");
     return fixture;
   }
 
@@ -50,8 +50,16 @@ describe("SupplyChain", function () {
     ).to.emit(supplyChain, "BatchCreated");
 
     await expect(
-      supplyChain.connect(manufacturer).createProduct(1, "Aspirin 100mg")
+      supplyChain.connect(manufacturer).createProduct(1, "Aspirin 100mg", "SN-ASP-001")
     ).to.emit(supplyChain, "ProductCreated");
+  });
+
+  it("prevents duplicate serial numbers", async function () {
+    const { supplyChain, manufacturer } = await createBatchAndProduct();
+
+    await expect(
+      supplyChain.connect(manufacturer).createProduct(1, "Counterfeit Paracetamol", "SN-DEMO-001")
+    ).to.be.revertedWith("Serial number already exists");
   });
 
   it("transfers product only between authorized actors", async function () {
@@ -66,7 +74,9 @@ describe("SupplyChain", function () {
     ).to.emit(supplyChain, "ProductTransferred");
 
     const product = await supplyChain.getProduct(1);
+    const sameProduct = await supplyChain.getProductBySerial("SN-DEMO-001");
     expect(product.currentOwner).to.equal(distributor.address);
+    expect(sameProduct.id).to.equal(1);
     expect(product.status).to.equal(1);
   });
 
@@ -117,6 +127,20 @@ describe("SupplyChain", function () {
     expect(verification.authentic).to.equal(true);
     expect(verification.recalled).to.equal(true);
     expect(verification.blocked).to.equal(true);
+  });
+
+  it("allows regulator to unrecalled a batch", async function () {
+    const { supplyChain, manufacturer, distributor, regulator } = await createBatchAndProduct();
+
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d-unrecall"));
+    await supplyChain.connect(regulator).recallBatch(1, "Temperature violation", op("recall-before-unrecall"));
+    await expect(
+      supplyChain.connect(regulator).unrecalledBatch(1, "Investigation cleared batch", op("unrecall"))
+    ).to.emit(supplyChain, "BatchUnrecalled");
+
+    const verification = await supplyChain.verifyProductBySerial("SN-DEMO-001");
+    expect(verification.recalled).to.equal(false);
+    expect(verification.blocked).to.equal(false);
   });
 
   it("returns immutable product history", async function () {

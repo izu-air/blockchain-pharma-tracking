@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
 import { saveBatchMetadata, saveMetadata, saveProductEvent } from "../lib/api";
 import { createBatch, createProduct, metadataHash, temperatureHash } from "../lib/contract";
 import { toUnixDate } from "../lib/status";
@@ -6,6 +7,7 @@ import { ResultMessage } from "../components/ResultMessage";
 
 export default function RegisterProductPage() {
   const [name, setName] = useState("Парацетамол 500 мг");
+  const [serialNumber, setSerialNumber] = useState("SN-DEMO-001");
   const [batchId, setBatchId] = useState("");
   const [batchNumber, setBatchNumber] = useState("BATCH-2026-001");
   const [productionDate, setProductionDate] = useState("2026-05-07");
@@ -57,7 +59,7 @@ export default function RegisterProductPage() {
     setProductId("");
 
     try {
-      const result = await createProduct(batchId, name);
+      const result = await createProduct(batchId, name, serialNumber);
       setTxHash(result.txHash);
       setProductId(result.productId);
 
@@ -66,7 +68,7 @@ export default function RegisterProductPage() {
           blockchainProductId: Number(result.productId),
           batchNumber,
           expirationDate,
-          description
+          description: `${description} Serial: ${serialNumber}`
         });
         await saveProductEvent({
           blockchainProductId: Number(result.productId),
@@ -103,9 +105,16 @@ export default function RegisterProductPage() {
         <h3 className="font-semibold">2. Создание продукта в партии</h3>
         <Field label="ID партии" value={batchId} onChange={setBatchId} />
         <Field label="Название препарата" value={name} onChange={setName} />
+        <Field label="Серийный номер" value={serialNumber} onChange={setSerialNumber} />
         <button className="button" disabled={loading || !batchId}>{loading ? "Отправка..." : "Создать продукт"}</button>
       </form>
       {productId && <p className="mt-4 text-sm text-stone-700">Создан ID продукта: <b>{productId}</b></p>}
+      {productId && (
+        <div className="mt-4 w-fit rounded-lg border border-stone-200 bg-white p-4">
+          <QRCodeSVG value={`${window.location.origin}/verify?serial=${encodeURIComponent(serialNumber)}`} size={160} />
+          <p className="mt-2 text-center text-xs text-stone-600">QR для проверки</p>
+        </div>
+      )}
       <div className="mt-4">
         <ResultMessage error={error} txHash={txHash} />
       </div>

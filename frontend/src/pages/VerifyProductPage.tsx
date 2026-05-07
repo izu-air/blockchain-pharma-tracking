@@ -1,13 +1,17 @@
 import { CheckCircle2, Search, XCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { QRCodeSVG } from "qrcode.react";
+import { useSearchParams } from "react-router-dom";
 import { ProductCard } from "../components/ProductCard";
 import { getMetadata } from "../lib/api";
-import { getBatch, getProduct, verifyProduct } from "../lib/contract";
+import { getBatch, getProduct, getProductBySerial, verifyProduct, verifyProductBySerial } from "../lib/contract";
 import { formatAddress, formatBlockchainDate, statusLabels } from "../lib/status";
 import type { Product, ProductBatch, ProductMetadata, VerificationResult } from "../types/product";
 
 export default function VerifyProductPage() {
+  const [params] = useSearchParams();
   const [productId, setProductId] = useState("1");
+  const [serialNumber, setSerialNumber] = useState(params.get("serial") || "");
   const [product, setProduct] = useState<Product | null>(null);
   const [batch, setBatch] = useState<ProductBatch | null>(null);
   const [metadata, setMetadata] = useState<ProductMetadata | null>(null);
@@ -16,6 +20,13 @@ export default function VerifyProductPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    if (params.get("serial")) {
+      verify();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   async function verify() {
     setLoading(true);
     setError("");
@@ -23,10 +34,12 @@ export default function VerifyProductPage() {
     setProduct(null);
 
     try {
-      const loadedProduct = await getProduct(productId);
+      const loadedProduct = serialNumber.trim()
+        ? await getProductBySerial(serialNumber.trim())
+        : await getProduct(productId);
       const [loadedMetadata, loadedVerification, loadedBatch] = await Promise.all([
-        getMetadata(productId),
-        verifyProduct(productId),
+        getMetadata(loadedProduct.id.toString()),
+        serialNumber.trim() ? verifyProductBySerial(serialNumber.trim()) : verifyProduct(productId),
         getBatch(loadedProduct.batchId.toString())
       ]);
       setProduct(loadedProduct);
@@ -46,8 +59,9 @@ export default function VerifyProductPage() {
     <div className="space-y-6">
       <section className="panel">
         <h2 className="text-xl font-semibold">Проверка подлинности</h2>
-        <div className="mt-4 flex flex-col gap-3 md:flex-row">
-          <input className="input md:max-w-xs" value={productId} onChange={(event) => setProductId(event.target.value)} />
+        <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
+          <input className="input" placeholder="Serial number из QR" value={serialNumber} onChange={(event) => setSerialNumber(event.target.value)} />
+          <input className="input" placeholder="или blockchain product ID" value={productId} onChange={(event) => setProductId(event.target.value)} />
           <button className="button" onClick={verify} disabled={loading}>
             <Search size={18} />
             {loading ? "Проверка..." : "Проверить"}
@@ -77,6 +91,12 @@ export default function VerifyProductPage() {
       )}
 
       {product && <ProductCard product={product} metadata={metadata} batch={batch} verification={verification} />}
+      {product && (
+        <section className="panel w-fit">
+          <QRCodeSVG value={`${window.location.origin}/verify?serial=${encodeURIComponent(product.serialNumber)}`} size={160} />
+          <p className="mt-2 text-center text-xs text-stone-600">QR verification URL</p>
+        </section>
+      )}
     </div>
   );
 }

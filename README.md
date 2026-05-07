@@ -105,3 +105,5 @@ Blockchain является источником истины для ролей,
 - Recall mechanism: отозванная партия блокирует непроданные продукты.
 - Consumer verification: подлинность, текущий владелец, срок годности, recall warning и timeline.
 - Backend analytics, audit logs, product search и демонстрационный JWT по wallet address.
+- QR-код проверки продукта по serial number.
+- Mermaid-диаграммы архитектуры, transfer flow, verification flow и database schema.

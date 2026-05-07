@@ -27,6 +27,7 @@ export function ProductCard({
       <div className="mb-4 flex flex-col gap-2 border-b border-stone-200 pb-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">{product.name}</h2>
+          <p className="text-sm text-stone-600">Serial number: {product.serialNumber}</p>
           <p className="text-sm text-stone-600">ID в блокчейне: {product.id.toString()}</p>
           <p className="text-sm text-stone-600">Партия: {product.batchId.toString()}</p>
         </div>

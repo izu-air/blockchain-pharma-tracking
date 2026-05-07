@@ -2,7 +2,7 @@ import { ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { ResultMessage } from "../components/ResultMessage";
 import { saveProductEvent } from "../lib/api";
-import { recallBatch } from "../lib/contract";
+import { recallBatch, unrecalledBatch } from "../lib/contract";
 
 export default function RecallPage() {
   const [batchId, setBatchId] = useState("1");
@@ -11,18 +11,18 @@ export default function RecallPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleRecall(event: React.FormEvent) {
+  async function handleRecall(event: React.FormEvent, mode: "recall" | "unrecall") {
     event.preventDefault();
     setLoading(true);
     setError("");
     setTxHash("");
 
     try {
-      const hash = await recallBatch(batchId, reason);
+      const hash = mode === "recall" ? await recallBatch(batchId, reason) : await unrecalledBatch(batchId, reason);
       setTxHash(hash);
       await saveProductEvent({
         blockchainProductId: Number(batchId),
-        eventType: "BATCH_RECALLED",
+        eventType: mode === "recall" ? "BATCH_RECALLED" : "BATCH_UNRECALLED",
         transactionHash: hash
       });
     } catch (exception) {
@@ -42,7 +42,7 @@ export default function RecallPage() {
         </div>
       </div>
 
-      <form className="space-y-4" onSubmit={handleRecall}>
+      <form className="space-y-4" onSubmit={(event) => handleRecall(event, "recall")}>
         <label className="block">
           <span className="mb-1 block text-sm font-medium">ID партии</span>
           <input className="input" value={batchId} onChange={(event) => setBatchId(event.target.value)} required />
@@ -51,7 +51,12 @@ export default function RecallPage() {
           <span className="mb-1 block text-sm font-medium">Причина отзыва</span>
           <textarea className="input min-h-24" value={reason} onChange={(event) => setReason(event.target.value)} required />
         </label>
-        <button className="button" disabled={loading}>{loading ? "Отзыв..." : "Отозвать партию"}</button>
+        <div className="flex flex-wrap gap-3">
+          <button className="button" disabled={loading}>{loading ? "Операция..." : "Отозвать партию"}</button>
+          <button className="button-secondary" disabled={loading} onClick={(event) => handleRecall(event, "unrecall")}>
+            Снять отзыв
+          </button>
+        </div>
       </form>
 
       <div className="mt-4">
