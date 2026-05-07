@@ -1,0 +1,45 @@
+package com.diploma.pharma.service;
+
+import com.diploma.pharma.dto.ProductEventRequest;
+import com.diploma.pharma.dto.ProductEventResponse;
+import com.diploma.pharma.entity.ProductEvent;
+import com.diploma.pharma.repository.ProductEventRepository;
+import java.util.List;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class ProductEventService {
+    private final ProductEventRepository repository;
+
+    public ProductEventService(ProductEventRepository repository) {
+        this.repository = repository;
+    }
+
+    @Transactional
+    public ProductEventResponse create(ProductEventRequest request) {
+        ProductEvent event = new ProductEvent();
+        event.setBlockchainProductId(request.blockchainProductId());
+        event.setEventType(request.eventType());
+        event.setTransactionHash(request.transactionHash());
+        return toResponse(repository.save(event));
+    }
+
+    @Transactional(readOnly = true)
+    public List<ProductEventResponse> findByProduct(Long blockchainProductId) {
+        return repository.findByBlockchainProductIdOrderByCreatedAtDesc(blockchainProductId)
+                .stream()
+                .map(this::toResponse)
+                .toList();
+    }
+
+    private ProductEventResponse toResponse(ProductEvent event) {
+        return new ProductEventResponse(
+                event.getId(),
+                event.getBlockchainProductId(),
+                event.getEventType(),
+                event.getTransactionHash(),
+                event.getCreatedAt()
+        );
+    }
+}

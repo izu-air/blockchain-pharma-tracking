@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: pharma-supply-chain
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/pharma_chain}
+    username: ${DB_USER:postgres}
+    password: ${DB_PASSWORD:postgres}
+  jpa:
+    defer-datasource-initialization: true
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+  sql:
+    init:
+      mode: always
+
+server:
+  port: ${SERVER_PORT:8080}
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
