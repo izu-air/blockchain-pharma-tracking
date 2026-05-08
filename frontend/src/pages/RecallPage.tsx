@@ -2,7 +2,7 @@ import { ShieldAlert } from "lucide-react";
 import { useState } from "react";
 import { ResultMessage } from "../components/ResultMessage";
 import { saveProductEvent } from "../lib/api";
-import { recallBatch, unrecalledBatch } from "../lib/contract";
+import { recallBatch, unrecallBatch } from "../lib/contract";
 
 export default function RecallPage() {
   const [batchId, setBatchId] = useState("1");
@@ -18,7 +18,7 @@ export default function RecallPage() {
     setTxHash("");
 
     try {
-      const hash = mode === "recall" ? await recallBatch(batchId, reason) : await unrecalledBatch(batchId, reason);
+      const hash = mode === "recall" ? await recallBatch(batchId, reason) : await unrecallBatch(batchId, reason);
       setTxHash(hash);
       await saveProductEvent({
         blockchainProductId: Number(batchId),

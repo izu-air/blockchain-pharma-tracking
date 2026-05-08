@@ -264,7 +264,7 @@ contract SupplyChain is AccessControl {
         emit BatchRecalled(batchId, msg.sender, reason);
     }
 
-    function unrecalledBatch(uint256 batchId, string calldata reason, bytes32 operationId)
+    function unrecallBatch(uint256 batchId, string calldata reason, bytes32 operationId)
         external
         onlyRole(REGULATOR_ROLE)
         batchExists(batchId)
@@ -287,6 +287,13 @@ contract SupplyChain is AccessControl {
         }
 
         emit BatchUnrecalled(batchId, msg.sender, reason);
+    }
+
+
+    function unrecalledBatch(uint256 batchId, string calldata reason, bytes32 operationId)
+        external
+    {
+        unrecallBatch(batchId, reason, operationId);
     }
 
     function getProduct(uint256 productId)

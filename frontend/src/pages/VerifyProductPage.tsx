@@ -58,7 +58,8 @@ export default function VerifyProductPage() {
   return (
     <div className="space-y-6">
       <section className="panel">
-        <h2 className="text-xl font-semibold">Проверка подлинности</h2>
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Consumer verification</p>
+        <h2 className="mt-2 text-2xl font-semibold">Проверка подлинности</h2>
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto]">
           <input className="input" placeholder="Serial number из QR" value={serialNumber} onChange={(event) => setSerialNumber(event.target.value)} />
           <input className="input" placeholder="или blockchain product ID" value={productId} onChange={(event) => setProductId(event.target.value)} />
@@ -70,11 +71,11 @@ export default function VerifyProductPage() {
       </section>
 
       {verified !== null && (
-      <section className={`panel flex items-center gap-3 ${verified ? "border-green-200" : "border-red-200"}`}>
-          {verified ? <CheckCircle2 className="text-primary" /> : <XCircle className="text-red-600" />}
+      <section className={`panel flex items-center gap-3 ${verified ? "border-emerald-500/40" : "border-red-500/40"}`}>
+          {verified ? <CheckCircle2 className="text-primary" /> : <XCircle className="text-red-400" />}
           <div>
             <h3 className="font-semibold">{verified ? "Подлинность подтверждена" : "Подлинность не подтверждена"}</h3>
-            <p className="text-sm text-stone-600">
+            <p className="text-sm text-slate-300">
               {verified ? "Продукт найден в smart contract." : error || "Запись о продукте отсутствует."}
             </p>
           </div>
@@ -94,7 +95,7 @@ export default function VerifyProductPage() {
       {product && (
         <section className="panel w-fit">
           <QRCodeSVG value={`${window.location.origin}/verify?serial=${encodeURIComponent(product.serialNumber)}`} size={160} />
-          <p className="mt-2 text-center text-xs text-stone-600">QR verification URL</p>
+          <p className="mt-2 text-center text-xs text-slate-300">QR verification URL</p>
         </section>
       )}
     </div>

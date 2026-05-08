@@ -135,7 +135,7 @@ describe("SupplyChain", function () {
     await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d-unrecall"));
     await supplyChain.connect(regulator).recallBatch(1, "Temperature violation", op("recall-before-unrecall"));
     await expect(
-      supplyChain.connect(regulator).unrecalledBatch(1, "Investigation cleared batch", op("unrecall"))
+      supplyChain.connect(regulator).unrecallBatch(1, "Investigation cleared batch", op("unrecall"))
     ).to.emit(supplyChain, "BatchUnrecalled");
 
     const verification = await supplyChain.verifyProductBySerial("SN-DEMO-001");

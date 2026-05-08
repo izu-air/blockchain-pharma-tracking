@@ -1,37 +1,14 @@
-import { Blocks, Database, ShieldCheck, Truck } from "lucide-react";
+import { ArrowRight, Blocks, Database, ShieldCheck, Truck } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { getAnalyticsSummary } from "../lib/api";
 import type { AnalyticsSummary } from "../types/product";
 
 const cards = [
-  {
-    title: "Blockchain",
-    text: "Контракт хранит владельца, статус и историю продукта.",
-    icon: Blocks
-  },
-  {
-    title: "MetaMask",
-    text: "Пользователь подписывает операции своим кошельком.",
-    icon: ShieldCheck
-  },
-  {
-    title: "Supply chain",
-    text: "Производитель, дистрибьютор и аптека передают продукт друг другу.",
-    icon: Truck
-  },
-  {
-    title: "Backend",
-    text: "PostgreSQL хранит только дополнительные метаданные.",
-    icon: Database
-  }
-];
-
-const roleFlows = [
-  ["Производитель", "Создает партии и регистрирует продукты в конкретной партии."],
-  ["Дистрибьютор", "Получает продукт, передает его дальше и фиксирует доставку."],
-  ["Аптека", "Получает препарат и только она может отметить его как проданный."],
-  ["Регулятор", "Отзывает партии при нарушениях и блокирует дальнейшую продажу."],
-  ["Потребитель", "Проверяет подлинность, владельца, срок годности и recall-статус."]
+  { title: "Smart contract", text: "Хранит lifecycle, владельца, статус отзыва и неизменяемую историю.", icon: Blocks },
+  { title: "Wallet signature", text: "Каждое критичное действие подтверждается подписью через MetaMask.", icon: ShieldCheck },
+  { title: "Traceability", text: "Маршрут препарата прозрачен для производителей, дистрибьюторов, аптек и регулятора.", icon: Truck },
+  { title: "Off-chain metadata", text: "Backend хранит расширенные атрибуты и ускоряет аналитику без потери trust layer.", icon: Database }
 ];
 
 export default function DashboardPage() {
@@ -44,54 +21,48 @@ export default function DashboardPage() {
   return (
     <div className="space-y-6">
       <section className="panel">
-        <h2 className="text-2xl font-semibold">Панель управления</h2>
-        <p className="mt-2 max-w-3xl text-stone-600">
-          MVP демонстрирует, как блокчейн может использоваться для прозрачного отслеживания лекарств.
-          Основные действия выполняются через smart contract, а backend дополняет систему справочными данными.
+        <p className="text-xs uppercase tracking-[0.2em] text-emerald-300">Diploma-ready platform</p>
+        <h2 className="mt-2 text-3xl font-semibold">Профессиональная система отслеживания фармцепочки</h2>
+        <p className="mt-3 max-w-3xl text-slate-300">
+          Платформа демонстрирует реальную blockchain-ценность: anti-counterfeit верификацию, события поставок,
+          контроль отзывов партий и публичную проверку подлинности по QR-коду.
         </p>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <Link className="button" to="/verify">Проверить продукт</Link>
+          <Link className="button-secondary" to="/register">Зарегистрировать партию <ArrowRight size={16} /></Link>
+        </div>
       </section>
+
+      {analytics && (
+        <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+          <Metric label="Metadata records" value={analytics.metadataRecords} />
+          <Metric label="Cached events" value={analytics.cachedEvents} />
+          <Metric label="Recall events" value={analytics.recallEvents} />
+          <Metric label="System health" value="Operational" />
+        </section>
+      )}
 
       <section className="grid gap-4 md:grid-cols-2">
         {cards.map((card) => {
           const Icon = card.icon;
           return (
             <div key={card.title} className="panel">
-              <Icon className="mb-3 text-primary" size={24} />
+              <div className="mb-4 inline-flex rounded-lg bg-emerald-500/20 p-2 text-emerald-300"><Icon size={20} /></div>
               <h3 className="font-semibold">{card.title}</h3>
-              <p className="mt-1 text-sm text-stone-600">{card.text}</p>
+              <p className="mt-2 text-sm text-slate-300">{card.text}</p>
             </div>
           );
         })}
-      </section>
-
-      {analytics && (
-        <section className="grid gap-4 md:grid-cols-3">
-          <Metric label="Метаданные" value={analytics.metadataRecords} />
-          <Metric label="Кэш событий" value={analytics.cachedEvents} />
-          <Metric label="Отзывов" value={analytics.recallEvents} />
-        </section>
-      )}
-
-      <section className="panel">
-        <h2 className="text-xl font-semibold">Ролевые сценарии</h2>
-        <div className="mt-4 grid gap-3 md:grid-cols-2">
-          {roleFlows.map(([role, text]) => (
-            <div key={role} className="rounded-md border border-stone-200 p-3">
-              <h3 className="font-medium">{role}</h3>
-              <p className="mt-1 text-sm text-stone-600">{text}</p>
-            </div>
-          ))}
-        </div>
       </section>
     </div>
   );
 }
 
-function Metric({ label, value }: { label: string; value: number }) {
+function Metric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="panel">
-      <p className="text-sm text-stone-500">{label}</p>
-      <p className="mt-1 text-2xl font-semibold">{value}</p>
+      <p className="text-xs uppercase tracking-wide text-slate-400">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-emerald-300">{value}</p>
     </div>
   );
 }
