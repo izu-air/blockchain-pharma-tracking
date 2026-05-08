@@ -13,7 +13,7 @@ export const supplyChainAbi = [
   "function transferProduct(uint256 productId,address newOwner,bytes32 operationId)",
   "function updateStatus(uint256 productId,uint8 newStatus,bytes32 operationId)",
   "function recallBatch(uint256 batchId,string reason,bytes32 operationId)",
-  "function unrecalledBatch(uint256 batchId,string reason,bytes32 operationId)",
+  "function unrecallBatch(uint256 batchId,string reason,bytes32 operationId)",
   "function getProduct(uint256 productId) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
   "function getProductBySerial(string serialNumber) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
   "function getProductIdBySerial(string serialNumber) view returns (uint256)",
@@ -152,9 +152,9 @@ export async function recallBatch(batchId: string, reason: string) {
   return receipt.hash as string;
 }
 
-export async function unrecalledBatch(batchId: string, reason: string) {
+export async function unrecallBatch(batchId: string, reason: string) {
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.unrecalledBatch(batchId, reason, operationId("unrecall"));
+  const tx = await contract.unrecallBatch(batchId, reason, operationId("unrecall"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }
