@@ -38,7 +38,7 @@ export default function RecallPage() {
         <ShieldAlert className="text-red-600" />
         <div>
           <h2 className="text-xl font-semibold">Отзыв партии</h2>
-          <p className="text-sm text-stone-600">Доступно только роли регулятора в smart contract.</p>
+          <p className="text-sm text-slate-400">Доступно только роли регулятора в smart contract.</p>
         </div>
       </div>
 

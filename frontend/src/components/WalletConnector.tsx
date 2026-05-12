@@ -1,5 +1,6 @@
 import { Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
+import { clearStoredToken } from "../lib/auth";
 import { connectWallet, getWalletRoles, getProvider } from "../lib/contract";
 import { formatAddress } from "../lib/status";
 
@@ -50,6 +51,7 @@ export function WalletConnector() {
         if (accounts.length === 0) {
           setAccount("");
           setRoles([]);
+          clearStoredToken();
           return;
         }
         await syncWallet(accounts[0]);
@@ -76,7 +78,7 @@ export function WalletConnector() {
         {account ? formatAddress(account) : "Подключить MetaMask"}
       </button>
       {error && <span className="text-xs text-red-600">{error}</span>}
-      {roles.length > 0 && <span className="text-xs text-stone-600">{roles.join(", ")}</span>}
+      {roles.length > 0 && <span className="max-w-[220px] truncate text-right text-xs text-slate-400">{roles.join(", ")}</span>}
     </div>
   );
 }

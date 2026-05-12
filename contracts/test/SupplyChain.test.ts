@@ -154,4 +154,29 @@ describe("SupplyChain", function () {
     expect(history[1].previousOwner).to.equal(manufacturer.address);
     expect(history[1].newOwner).to.equal(distributor.address);
   });
+
+  it("rejects non-manufacturer batch and product creation", async function () {
+    const { supplyChain, regulator, attacker } = await deployFixture();
+    const now = Math.floor(Date.now() / 1000);
+
+    await expect(
+      supplyChain.connect(regulator).createBatch(now, now + 1000, ethers.id("t"), ethers.id("m"))
+    ).to.be.reverted;
+
+    await expect(
+      supplyChain.connect(attacker).createProduct(1, "Fake", "SN-FAKE-1")
+    ).to.be.reverted;
+  });
+
+  it("rejects unauthorized status updates", async function () {
+    const { supplyChain, manufacturer, attacker } = await createBatchAndProduct();
+
+    await expect(supplyChain.connect(attacker).updateStatus(1, 2, op("hack"))).to.be.revertedWith(
+      "Only current owner can perform this action"
+    );
+
+    await expect(supplyChain.connect(manufacturer).updateStatus(1, 3, op("bad-sale"))).to.be.revertedWith(
+      "Only pharmacy can mark sold"
+    );
+  });
 });

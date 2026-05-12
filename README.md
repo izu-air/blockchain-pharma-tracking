@@ -84,11 +84,33 @@ ETHERSCAN_API_KEY=OPTIONAL
 POLYGONSCAN_API_KEY=OPTIONAL
 ```
 
-Создайте `frontend/.env`:
+Создайте `frontend/.env` (см. также `frontend/.env.example`):
 
 ```env
 VITE_CONTRACT_ADDRESS=0xYourDeployedContractAddress
 VITE_API_BASE_URL=http://localhost:8080/api
+# Рекомендуется для локального Hardhat (chain id 31337), чтобы MetaMask не отправлял транзакции в «чужую» сеть:
+VITE_CHAIN_ID=31337
+```
+
+### JWT и запись в backend
+
+По умолчанию Spring Security требует валидный JWT для `POST`/`PUT`/`PATCH`/`DELETE` к `/api/**` (кроме `/api/auth/**` и регистрации `POST /api/users`). Получите токен на странице **Вход** тем же адресом, что зарегистрирован в `app_users` (в `backend/src/main/resources/data.sql` заданы первые аккаунты Hardhat).
+
+Отключить проверку для локальных экспериментов без JWT:
+
+```bash
+set REQUIRE_JWT_FOR_WRITES=false
+```
+
+(или `REQUIRE_JWT_FOR_WRITES=false` в `.env` / переменных окружения процесса Java).
+
+### Индексация on-chain событий (опционально)
+
+```env
+BLOCKCHAIN_INDEXER_ENABLED=true
+BLOCKCHAIN_RPC_URL=http://127.0.0.1:8545
+BLOCKCHAIN_CONTRACT_ADDRESS=0xYourDeployedContractAddress
 ```
 
 ## Почему такая архитектура
@@ -104,6 +126,6 @@ Blockchain является источником истины для ролей,
 - Immutable product history с actor, timestamp, previous owner, new owner и operation id.
 - Recall mechanism: отозванная партия блокирует непроданные продукты.
 - Consumer verification: подлинность, текущий владелец, срок годности, recall warning и timeline.
-- Backend analytics, audit logs, product search и демонстрационный JWT по wallet address.
+- Backend analytics, audit logs, product search, защита мутаций JWT, индексация логов контракта в `product_events` (Web3j + `eth_getLogs`).
 - QR-код проверки продукта по serial number.
 - Mermaid-диаграммы архитектуры, transfer flow, verification flow и database schema.

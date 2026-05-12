@@ -3,20 +3,20 @@ import type { ProductHistoryItem } from "../types/product";
 
 export function HistoryTimeline({ history }: { history: ProductHistoryItem[] }) {
   if (history.length === 0) {
-    return <div className="panel text-sm text-stone-600">История пока пуста.</div>;
+    return <div className="panel text-sm text-slate-400">История пока пуста.</div>;
   }
 
   return (
     <div className="panel">
-      <h2 className="mb-4 text-lg font-semibold">История продукта</h2>
+      <h2 className="mb-4 text-lg font-semibold">Цепочка поставки (on-chain)</h2>
       <div className="space-y-4">
         {history.map((item, index) => (
-          <div key={`${item.timestamp}-${index}`} className="grid gap-3 border-l-2 border-green-200 pl-4">
+          <div key={`${item.timestamp}-${index}`} className="grid gap-3 border-l-2 border-emerald-500/50 pl-4">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-              <p className="font-medium">{translateAction(item.action)}</p>
-              <span className="text-sm text-stone-500">{formatBlockchainDate(item.timestamp)}</span>
+              <p className="font-medium text-slate-100">{translateAction(item.action)}</p>
+              <span className="text-sm text-slate-500">{formatBlockchainDate(item.timestamp)}</span>
             </div>
-            <div className="grid gap-2 text-sm text-stone-700 md:grid-cols-2">
+            <div className="grid gap-2 text-sm text-slate-300 md:grid-cols-2">
               <span>Статус: {statusLabels[item.status]}</span>
               <span>Участник: {formatAddress(item.actor)}</span>
               <span>От: {isZeroAddress(item.previousOwner) ? "создание" : formatAddress(item.previousOwner)}</span>

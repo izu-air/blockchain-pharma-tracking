@@ -5,8 +5,15 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/pharma_chain}
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
+    hikari:
+      # Быстрее явный таймаут вместо долгого «висения», если PostgreSQL недоступен
+      connection-timeout: 20000
+      maximum-pool-size: 10
   jpa:
     defer-datasource-initialization: true
+    # Явный диалект: при недоступной БД Hibernate всё равно не создаст полноценный JdbcEnvironment,
+    # но сообщение чаще указывает на реальную причину (connection refused / auth), а не только на dialect.
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
       ddl-auto: update
     open-in-view: false
@@ -30,7 +37,10 @@ blockchain:
   indexer:
     enabled: ${BLOCKCHAIN_INDEXER_ENABLED:false}
     delay-ms: ${BLOCKCHAIN_INDEXER_DELAY_MS:30000}
+    chunk-size: ${BLOCKCHAIN_INDEXER_CHUNK:2000}
 
 app:
   jwt:
     secret: ${JWT_SECRET:change-this-demo-secret}
+  security:
+    require-authentication-for-mutations: ${REQUIRE_JWT_FOR_WRITES:true}

@@ -86,7 +86,7 @@ export default function RegisterProductPage() {
   return (
     <div className="panel max-w-3xl">
       <h2 className="text-xl font-semibold">Регистрация продукта</h2>
-      <div className="mt-5 space-y-4 rounded-lg border border-stone-200 bg-stone-50 p-4">
+      <div className="mt-5 space-y-4 rounded-xl border border-white/10 bg-slate-950/50 p-4">
         <h3 className="font-semibold">1. Создание партии</h3>
         <Field label="Номер партии" value={batchNumber} onChange={setBatchNumber} />
         <Field label="Дата производства" value={productionDate} onChange={setProductionDate} type="date" />
@@ -108,11 +108,15 @@ export default function RegisterProductPage() {
         <Field label="Серийный номер" value={serialNumber} onChange={setSerialNumber} />
         <button className="button" disabled={loading || !batchId}>{loading ? "Отправка..." : "Создать продукт"}</button>
       </form>
-      {productId && <p className="mt-4 text-sm text-stone-700">Создан ID продукта: <b>{productId}</b></p>}
       {productId && (
-        <div className="mt-4 w-fit rounded-lg border border-stone-200 bg-white p-4">
+        <p className="mt-4 text-sm text-slate-300">
+          Создан ID продукта: <span className="font-mono text-emerald-300">{productId}</span>
+        </p>
+      )}
+      {productId && (
+        <div className="mt-4 w-fit rounded-xl border border-white/10 bg-slate-950/60 p-4">
           <QRCodeSVG value={`${window.location.origin}/verify?serial=${encodeURIComponent(serialNumber)}`} size={160} />
-          <p className="mt-2 text-center text-xs text-stone-600">QR для проверки</p>
+          <p className="mt-2 text-center text-xs text-slate-400">QR для проверки</p>
         </div>
       )}
       <div className="mt-4">

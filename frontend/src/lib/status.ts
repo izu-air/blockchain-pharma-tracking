@@ -9,11 +9,11 @@ export const statusLabels: Record<ExtendedProductStatus, string> = {
 };
 
 export const statusClasses: Record<ExtendedProductStatus, string> = {
-  0: "bg-stone-100 text-stone-700",
-  1: "bg-blue-50 text-blue-700",
-  2: "bg-green-50 text-green-700",
-  3: "bg-zinc-100 text-zinc-700",
-  4: "bg-red-50 text-red-700"
+  0: "bg-slate-700/80 text-slate-100",
+  1: "bg-sky-500/20 text-sky-200",
+  2: "bg-emerald-500/20 text-emerald-200",
+  3: "bg-violet-500/20 text-violet-200",
+  4: "bg-red-500/20 text-red-200"
 };
 
 export function formatAddress(address: string) {

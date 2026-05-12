@@ -9,7 +9,7 @@ export default function ManufacturerDashboardPage() {
           <Factory className="text-primary" />
           <div>
             <h2 className="text-xl font-semibold">Кабинет производителя</h2>
-            <p className="text-sm text-stone-600">Создание партий, регистрация серийных номеров и выпуск QR-кодов.</p>
+            <p className="text-sm text-slate-400">Создание партий, регистрация серийных номеров и выпуск QR-кодов.</p>
           </div>
         </div>
       </section>
@@ -26,7 +26,7 @@ function Action({ title, text, to }: { title: string; text: string; to: string }
     <Link className="panel block hover:border-primary" to={to}>
       <PackagePlus className="mb-3 text-primary" />
       <h3 className="font-semibold">{title}</h3>
-      <p className="mt-1 text-sm text-stone-600">{text}</p>
+      <p className="mt-1 text-sm text-slate-400">{text}</p>
     </Link>
   );
 }

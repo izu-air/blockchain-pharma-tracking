@@ -29,12 +29,27 @@ export const supplyChainAbi = [
 ];
 
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
+const expectedChainId = import.meta.env.VITE_CHAIN_ID;
 
 export async function getProvider() {
   if (!window.ethereum) {
     throw new Error("MetaMask не найден. Установите расширение и повторите попытку.");
   }
   return new BrowserProvider(window.ethereum);
+}
+
+export async function ensureExpectedChain() {
+  if (!expectedChainId) {
+    return;
+  }
+  const provider = await getProvider();
+  const network = await provider.getNetwork();
+  const want = Number(expectedChainId);
+  if (Number(network.chainId) !== want) {
+    throw new Error(
+      `Требуется сеть с chain id ${want} (задайте VITE_CHAIN_ID). Текущая сеть MetaMask: ${network.chainId}.`
+    );
+  }
 }
 
 export async function connectWallet() {
@@ -87,6 +102,7 @@ export async function getWalletRoles(address: string) {
 }
 
 export async function createBatch(productionDate: number, expirationDate: number, temperatureLog: string, metadata: string) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.createBatch(
     productionDate,
@@ -112,6 +128,7 @@ export async function createBatch(productionDate: number, expirationDate: number
 }
 
 export async function createProduct(batchId: string, name: string, serialNumber: string) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.createProduct(batchId, name, serialNumber);
   const receipt = await tx.wait();
@@ -132,6 +149,7 @@ export async function createProduct(batchId: string, name: string, serialNumber:
 }
 
 export async function transferProduct(productId: string, newOwner: string) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.transferProduct(productId, newOwner, operationId("transfer"));
   const receipt = await tx.wait();
@@ -139,6 +157,7 @@ export async function transferProduct(productId: string, newOwner: string) {
 }
 
 export async function updateStatus(productId: string, status: ExtendedProductStatus) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.updateStatus(productId, status, operationId("status"));
   const receipt = await tx.wait();
@@ -146,6 +165,7 @@ export async function updateStatus(productId: string, status: ExtendedProductSta
 }
 
 export async function recallBatch(batchId: string, reason: string) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.recallBatch(batchId, reason, operationId("recall"));
   const receipt = await tx.wait();
@@ -153,6 +173,7 @@ export async function recallBatch(batchId: string, reason: string) {
 }
 
 export async function unrecallBatch(batchId: string, reason: string) {
+  await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.unrecallBatch(batchId, reason, operationId("unrecall"));
   const receipt = await tx.wait();

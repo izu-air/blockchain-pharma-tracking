@@ -4,5 +4,6 @@ public enum UserRole {
     MANUFACTURER,
     DISTRIBUTOR,
     PHARMACY,
+    REGULATOR,
     CONSUMER
 }

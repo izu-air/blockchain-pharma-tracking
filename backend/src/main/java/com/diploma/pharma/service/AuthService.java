@@ -5,6 +5,7 @@ import com.diploma.pharma.dto.AuthResponse;
 import com.diploma.pharma.entity.User;
 import com.diploma.pharma.exception.ResourceNotFoundException;
 import com.diploma.pharma.repository.UserRepository;
+import java.time.Duration;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -24,7 +25,7 @@ public class AuthService {
     public AuthResponse login(AuthRequest request) {
         User user = userRepository.findByWalletAddressIgnoreCase(request.walletAddress())
                 .orElseThrow(() -> new ResourceNotFoundException("Wallet is not registered"));
-        String token = jwtService.createToken(user.getWalletAddress(), user.getRole());
+        String token = jwtService.createToken(user.getWalletAddress(), user.getRole(), Duration.ofHours(24));
         auditLogService.record(user.getWalletAddress(), "LOGIN", "USER", user.getId().toString(), "JWT token issued");
         return new AuthResponse(token, user.getWalletAddress(), user.getRole());
     }

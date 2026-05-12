@@ -1,5 +1,6 @@
 package com.diploma.pharma.exception;
 
+import jakarta.validation.ConstraintViolationException;
 import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
@@ -27,6 +28,14 @@ public class GlobalExceptionHandler {
         exception.getBindingResult().getFieldErrors()
                 .forEach(error -> errors.put(error.getField(), error.getDefaultMessage()));
         return build(HttpStatus.BAD_REQUEST, "Validation failed", errors);
+    }
+
+    @ExceptionHandler(ConstraintViolationException.class)
+    public ResponseEntity<ApiError> handleConstraint(ConstraintViolationException exception) {
+        Map<String, String> errors = new HashMap<>();
+        exception.getConstraintViolations()
+                .forEach(violation -> errors.put(violation.getPropertyPath().toString(), violation.getMessage()));
+        return build(HttpStatus.BAD_REQUEST, "Constraint validation failed", errors);
     }
 
     @ExceptionHandler(Exception.class)

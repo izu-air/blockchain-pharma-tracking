@@ -16,7 +16,7 @@ export default function AnalyticsPage() {
     <div className="space-y-6">
       <section className="panel">
         <h2 className="text-xl font-semibold">Аналитика</h2>
-        <p className="mt-1 text-sm text-stone-600">Backend показывает кэшированные blockchain events и метаданные.</p>
+        <p className="mt-1 text-sm text-slate-400">Backend показывает кэшированные blockchain events и метаданные.</p>
       </section>
       {error && <div className="panel text-sm text-red-600">{error}</div>}
       {analytics && (
@@ -36,7 +36,7 @@ export default function AnalyticsPage() {
 function Metric({ label, value }: { label: string; value: number }) {
   return (
     <div className="panel">
-      <p className="text-sm text-stone-500">{label}</p>
+      <p className="text-sm text-slate-500">{label}</p>
       <p className="mt-1 text-3xl font-semibold">{value}</p>
     </div>
   );

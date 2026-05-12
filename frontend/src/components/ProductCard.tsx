@@ -15,28 +15,28 @@ export function ProductCard({
   return (
     <div className="panel">
       {(verification?.recalled || product.blocked) && (
-        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">
+        <div className="mb-4 rounded-xl border border-red-500/40 bg-red-950/40 p-3 text-sm font-medium text-red-200">
           Продукт относится к отозванной партии. Продажа и дальнейшее движение заблокированы.
         </div>
       )}
       {verification?.expired && (
-        <div className="mb-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm font-medium text-amber-800">
+        <div className="mb-4 rounded-xl border border-amber-500/40 bg-amber-950/30 p-3 text-sm font-medium text-amber-100">
           Срок годности продукта истек. Покупателю следует отказаться от использования.
         </div>
       )}
-      <div className="mb-4 flex flex-col gap-2 border-b border-stone-200 pb-4 md:flex-row md:items-start md:justify-between">
+      <div className="mb-4 flex flex-col gap-2 border-b border-white/10 pb-4 md:flex-row md:items-start md:justify-between">
         <div>
           <h2 className="text-xl font-semibold">{product.name}</h2>
-          <p className="text-sm text-stone-600">Serial number: {product.serialNumber}</p>
-          <p className="text-sm text-stone-600">ID в блокчейне: {product.id.toString()}</p>
-          <p className="text-sm text-stone-600">Партия: {product.batchId.toString()}</p>
+          <p className="text-sm text-slate-400">Serial number: {product.serialNumber}</p>
+          <p className="text-sm text-slate-400">ID в блокчейне: {product.id.toString()}</p>
+          <p className="text-sm text-slate-400">Партия: {product.batchId.toString()}</p>
         </div>
         <span className={`w-fit rounded-md px-3 py-1 text-sm font-medium ${statusClasses[product.status]}`}>
           {statusLabels[product.status]}
         </span>
       </div>
 
-      <div className="grid gap-3 text-sm md:grid-cols-2">
+      <div className="grid gap-3 text-sm text-slate-200 md:grid-cols-2">
         <Info label="Производитель" value={formatAddress(product.manufacturer)} />
         <Info label="Текущий владелец" value={formatAddress(product.currentOwner)} />
         <Info label="Дата создания" value={formatBlockchainDate(product.createdAt)} />
@@ -57,7 +57,7 @@ export function ProductCard({
           </>
         )}
       </div>
-      {metadata?.description && <p className="mt-4 text-sm text-stone-700">{metadata.description}</p>}
+      {metadata?.description && <p className="mt-4 text-sm text-slate-300">{metadata.description}</p>}
     </div>
   );
 }
@@ -65,8 +65,8 @@ export function ProductCard({
 function Info({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs uppercase text-stone-500">{label}</p>
-      <p className="font-medium">{value}</p>
+      <p className="text-xs uppercase text-slate-500">{label}</p>
+      <p className="font-medium text-slate-100">{value}</p>
     </div>
   );
 }

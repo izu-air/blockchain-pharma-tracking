@@ -9,14 +9,14 @@ export default function DistributorDashboardPage() {
           <Truck className="text-primary" />
           <div>
             <h2 className="text-xl font-semibold">Кабинет дистрибьютора</h2>
-            <p className="text-sm text-stone-600">Передача продуктов и фиксация статусов доставки в блокчейне.</p>
+            <p className="text-sm text-slate-400">Передача продуктов и фиксация статусов доставки в блокчейне.</p>
           </div>
         </div>
       </section>
       <Link className="panel block hover:border-primary" to="/transfer">
         <Send className="mb-3 text-primary" />
         <h3 className="font-semibold">Передать продукт</h3>
-        <p className="mt-1 text-sm text-stone-600">Только текущий владелец с разрешенной ролью может выполнить передачу.</p>
+        <p className="mt-1 text-sm text-slate-400">Только текущий владелец с разрешенной ролью может выполнить передачу.</p>
       </Link>
     </div>
   );

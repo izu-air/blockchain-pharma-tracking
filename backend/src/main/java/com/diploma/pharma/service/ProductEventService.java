@@ -20,6 +20,21 @@ public class ProductEventService {
 
     @Transactional
     public ProductEventResponse create(ProductEventRequest request) {
+        if (repository.existsByTransactionHashAndEventTypeAndBlockchainProductId(
+                request.transactionHash(),
+                request.eventType(),
+                request.blockchainProductId()
+        )) {
+            return repository
+                    .findFirstByTransactionHashAndEventTypeAndBlockchainProductIdOrderByIdDesc(
+                            request.transactionHash(),
+                            request.eventType(),
+                            request.blockchainProductId()
+                    )
+                    .map(this::toResponse)
+                    .orElseThrow();
+        }
+
         ProductEvent event = new ProductEvent();
         event.setBlockchainProductId(request.blockchainProductId());
         event.setEventType(request.eventType());
