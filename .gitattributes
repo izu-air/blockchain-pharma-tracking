@@ -1,0 +1,7 @@
+# Normalize line endings: LF in the repository, consistent across OS.
+* text=auto
+
+.gitattributes text eol=lf
+*.java text eol=lf
+*.yml text eol=lf
+*.properties text eol=lf
