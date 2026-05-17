@@ -1,15 +1,25 @@
 import { useEffect, useState } from "react";
 import { getAnalyticsSummary } from "../lib/api";
 import type { AnalyticsSummary } from "../types/product";
+import { MetricGridSkeleton } from "../components/Skeleton";
 
 export default function AnalyticsPage() {
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    getAnalyticsSummary().then(setAnalytics).catch((exception) => {
-      setError(exception instanceof Error ? exception.message : "Не удалось загрузить аналитику");
-    });
+    let cancelled = false;
+    setLoading(true);
+    getAnalyticsSummary()
+      .then((data) => { if (!cancelled) { setAnalytics(data); setError(""); } })
+      .catch((exception) => {
+        if (!cancelled) {
+          setError(exception instanceof Error ? exception.message : "Не удалось загрузить аналитику");
+        }
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -18,8 +28,9 @@ export default function AnalyticsPage() {
         <h2 className="text-xl font-semibold">Аналитика</h2>
         <p className="mt-1 text-sm text-slate-400">Backend показывает кэшированные blockchain events и метаданные.</p>
       </section>
-      {error && <div className="panel text-sm text-red-600">{error}</div>}
-      {analytics && (
+      {loading && <MetricGridSkeleton count={6} />}
+      {!loading && error && <div className="panel text-sm text-red-400">{error}</div>}
+      {!loading && analytics && (
         <section className="grid gap-4 md:grid-cols-3">
           <Metric label="Метаданные продуктов" value={analytics.metadataRecords} />
           <Metric label="Кэш событий" value={analytics.cachedEvents} />

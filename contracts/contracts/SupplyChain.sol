@@ -18,28 +18,32 @@ contract SupplyChain is AccessControl {
         Recalled
     }
 
+    // Storage layout note: bools are placed together near an address so the
+    // EVM packs them into the same slot as the address (address=20 bytes +
+    // bool 1 byte each fit into 32 bytes).  This saves one SSTORE per batch
+    // and per product over the naive layout.
     struct ProductBatch {
         uint256 batchId;
-        address manufacturer;
         uint256 productionDate;
         uint256 expirationDate;
-        bool recalled;
         bytes32 temperatureHash;
         bytes32 metadataHash;
-        bool exists;
+        address manufacturer; // 20 bytes
+        bool recalled;        // 1 byte   ─ packed with manufacturer
+        bool exists;          // 1 byte   ─ packed with manufacturer
     }
 
     struct Product {
         uint256 id;
         uint256 batchId;
+        uint256 createdAt;
+        address manufacturer; // 20 bytes
+        Status status;        // 1 byte   ─ packed
+        bool blocked;         // 1 byte   ─ packed
+        bool exists;          // 1 byte   ─ packed
+        address currentOwner; // 20 bytes ─ new slot (still cheaper than scattered)
         string name;
         string serialNumber;
-        address manufacturer;
-        address currentOwner;
-        uint256 createdAt;
-        Status status;
-        bool blocked;
-        bool exists;
     }
 
     struct ProductHistory {
@@ -138,7 +142,9 @@ contract SupplyChain is AccessControl {
     ) external onlyRole(MANUFACTURER_ROLE) returns (uint256) {
         require(productionDate > 0, "Production date is required");
         require(expirationDate > productionDate, "Expiration date must be after production date");
+        require(expirationDate > block.timestamp, "Expiration date must be in the future");
         require(metadataHash != bytes32(0), "Metadata hash is required");
+        require(temperatureHash != bytes32(0), "Temperature hash is required");
 
         uint256 batchId = nextBatchId;
         nextBatchId++;
@@ -201,6 +207,7 @@ contract SupplyChain is AccessControl {
         notBlocked(productId)
         uniqueOperation(operationId)
     {
+        require(newOwner != address(0), "New owner cannot be zero address");
         require(_isAuthorizedSupplyActor(msg.sender), "Sender is not an authorized supply actor");
         require(_isAuthorizedSupplyActor(newOwner), "New owner is not an authorized supply actor");
         require(newOwner != msg.sender, "New owner must be different");
@@ -224,13 +231,18 @@ contract SupplyChain is AccessControl {
         uniqueOperation(operationId)
     {
         require(newStatus != Status.Recalled, "Use recallBatch for recalls");
-        require(products[productId].status != Status.Sold, "Sold product status is final");
+        Status currentStatus = products[productId].status;
+        require(currentStatus != Status.Sold, "Sold product status is final");
+        require(newStatus != currentStatus, "Status is already set");
 
+        // Role check first — clearer error messages take precedence over the
+        // generic transition-validation revert.
         if (newStatus == Status.Sold) {
             require(hasRole(PHARMACY_ROLE, msg.sender), "Only pharmacy can mark sold");
-            require(products[productId].status == Status.Delivered, "Product must be delivered before sold");
+            require(currentStatus == Status.Delivered, "Product must be delivered before sold");
         } else {
             require(_isAuthorizedSupplyActor(msg.sender), "Actor is not authorized");
+            require(_isValidTransition(currentStatus, newStatus), "Invalid status transition");
         }
 
         products[productId].status = newStatus;
@@ -239,6 +251,29 @@ contract SupplyChain is AccessControl {
         emit ProductStatusUpdated(productId, newStatus, msg.sender, operationId);
     }
 
+    /**
+     * Allowed forward transitions:
+     *   Manufactured -> InTransit
+     *   InTransit    -> Delivered
+     *   Delivered    -> Sold
+     * Backward transitions and skips are rejected to keep the audit trail
+     * monotonic.  Status.Recalled is set only by recallBatch().
+     */
+    function _isValidTransition(Status from, Status to) private pure returns (bool) {
+        if (from == Status.Manufactured && to == Status.InTransit) return true;
+        if (from == Status.InTransit    && to == Status.Delivered) return true;
+        if (from == Status.Delivered    && to == Status.Sold)      return true;
+        return false;
+    }
+
+    /**
+     * Recalls every non-sold product in the batch in one transaction.
+     *
+     * NOTE on gas: this loop is bounded by `batchProducts[batchId].length`.
+     * For the MVP we expect tens of products per batch, well within block
+     * gas limit. For larger production batches a paginated variant
+     * (`recallBatchRange(batchId, from, to, ...)`) should be added.
+     */
     function recallBatch(uint256 batchId, string calldata reason, bytes32 operationId)
         external
         onlyRole(REGULATOR_ROLE)
@@ -256,8 +291,12 @@ contract SupplyChain is AccessControl {
             if (product.exists && product.status != Status.Sold) {
                 product.blocked = true;
                 product.status = Status.Recalled;
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.Recalled, reason, operationId);
-                emit ProductStatusUpdated(ids[i], Status.Recalled, msg.sender, operationId);
+                // Per-product operationId derived from the batch operationId
+                // so the audit trail stays unique while keeping the batch-level
+                // root cause traceable.
+                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
+                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.Recalled, reason, perProductOp);
+                emit ProductStatusUpdated(ids[i], Status.Recalled, msg.sender, perProductOp);
             }
         }
 
@@ -281,8 +320,9 @@ contract SupplyChain is AccessControl {
             if (product.exists && product.status == Status.Recalled) {
                 product.blocked = false;
                 product.status = Status.InTransit;
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, operationId);
-                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, operationId);
+                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
+                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, perProductOp);
+                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, perProductOp);
             }
         }
 
@@ -353,7 +393,11 @@ contract SupplyChain is AccessControl {
     {
         Product memory product = products[productId];
         ProductBatch memory batch = batches[product.batchId];
-        bool expired = block.timestamp > batch.expirationDate;
+        // Expiration is exclusive: the product is considered expired starting
+        // from the second its expirationDate timestamp matches. Industry-standard
+        // "valid through DAY X" can be encoded by setting expirationDate to the
+        // 23:59:59 timestamp of day X.
+        bool expired = block.timestamp >= batch.expirationDate;
 
         return VerificationResult({
             authentic: product.exists && batch.exists,
@@ -377,7 +421,11 @@ contract SupplyChain is AccessControl {
 
         Product memory product = products[productId];
         ProductBatch memory batch = batches[product.batchId];
-        bool expired = block.timestamp > batch.expirationDate;
+        // Expiration is exclusive: the product is considered expired starting
+        // from the second its expirationDate timestamp matches. Industry-standard
+        // "valid through DAY X" can be encoded by setting expirationDate to the
+        // 23:59:59 timestamp of day X.
+        bool expired = block.timestamp >= batch.expirationDate;
 
         return VerificationResult({
             authentic: product.exists && batch.exists,

@@ -52,9 +52,19 @@ export async function ensureExpectedChain() {
   }
 }
 
+/** Strict Ethereum address pattern (0x + 40 hex chars). */
+const ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+
+export function isValidAddress(value: string): boolean {
+  return typeof value === "string" && ADDRESS_PATTERN.test(value.trim());
+}
+
 export async function connectWallet() {
   const provider = await getProvider();
   await provider.send("eth_requestAccounts", []);
+  // Verify chain BEFORE returning to the caller, so subsequent contract
+  // calls don't blow up with cryptic network-mismatch errors.
+  await ensureExpectedChain();
   const signer = await provider.getSigner();
   return signer.getAddress();
 }

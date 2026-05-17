@@ -10,22 +10,39 @@ spring:
       connection-timeout: 20000
       maximum-pool-size: 10
   jpa:
-    defer-datasource-initialization: true
     # Явный диалект: при недоступной БД Hibernate всё равно не создаст полноценный JdbcEnvironment,
     # но сообщение чаще указывает на реальную причину (connection refused / auth), а не только на dialect.
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      # Default "validate" — Flyway owns schema evolution (V*__*.sql under
+      # src/main/resources/db/migration).  For ad-hoc local dev without
+      # Flyway, override HIBERNATE_DDL_AUTO=update or set FLYWAY_ENABLED=false.
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
   sql:
     init:
-      mode: always
+      mode: never
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
 
 server:
   port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose only liveness/readiness — never expose env/heapdump/etc in prod.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
 
 springdoc:
   swagger-ui:
@@ -41,6 +58,10 @@ blockchain:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-this-demo-secret}
+    # MUST be supplied via environment (JWT_SECRET).  The application fails
+    # to start otherwise — no plaintext default is provided on purpose so
+    # that a misconfigured deployment cannot accidentally accept forged
+    # tokens signed with a well-known string.
+    secret: ${JWT_SECRET:}
   security:
     require-authentication-for-mutations: ${REQUIRE_JWT_FOR_WRITES:true}

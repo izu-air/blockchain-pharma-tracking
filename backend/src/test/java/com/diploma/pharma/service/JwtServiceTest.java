@@ -9,7 +9,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class JwtServiceTest {
     @Test
     void createsVerifiableToken() {
-        JwtService jwtService = new JwtService("test-secret");
+        JwtService jwtService = new JwtService("unit-test-secret-with-at-least-32-chars-of-entropy");
 
         String token = jwtService.createToken("0x0000000000000000000000000000000000000001", UserRole.MANUFACTURER);
 
@@ -21,7 +21,7 @@ class JwtServiceTest {
 
     @Test
     void rejectsExpiredToken() {
-        JwtService jwtService = new JwtService("test-secret");
+        JwtService jwtService = new JwtService("unit-test-secret-with-at-least-32-chars-of-entropy");
         String token = jwtService.createToken(
                 "0x0000000000000000000000000000000000000001",
                 UserRole.MANUFACTURER,

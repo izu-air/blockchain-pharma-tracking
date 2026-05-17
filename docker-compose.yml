@@ -1,19 +1,23 @@
 services:
   postgres:
     image: postgres:16-alpine
+    # Не выставляем порт 5432 на хост в production-сборке: БД доступна
+    # только внутренней сети compose. Для локальной отладки раскомментируйте
+    # секцию ports в docker-compose.override.yml.
     environment:
-      POSTGRES_DB: pharma_chain
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
+      POSTGRES_DB: ${POSTGRES_DB:-pharma_chain}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+    expose:
+      - "5432"
     volumes:
       - pharma_pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d pharma_chain"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-pharma_chain}"]
       interval: 5s
       timeout: 5s
       retries: 10
+    restart: unless-stopped
 
   backend:
     build:
@@ -22,28 +26,46 @@ services:
     ports:
       - "8080:8080"
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/pharma_chain
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      FRONTEND_ORIGIN: http://localhost:5173
-      JWT_SECRET: change-in-production-use-long-secret
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-pharma_chain}
+      DB_USER: ${POSTGRES_USER:-postgres}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in .env}
+      FRONTEND_ORIGIN: ${FRONTEND_ORIGIN:-http://localhost:5173}
+      # JWT_SECRET must be a strong random string of ≥32 chars.  No default
+      # is provided — the backend refuses to start without it.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (min 32 chars)}
       REQUIRE_JWT_FOR_WRITES: "true"
+      # Flyway runs V*.sql migrations on startup; Hibernate is in validate
+      # mode and will refuse to start if the schema drifts from @Entity.
+      HIBERNATE_DDL_AUTO: ${HIBERNATE_DDL_AUTO:-validate}
       FLYWAY_ENABLED: "true"
-      BLOCKCHAIN_INDEXER_ENABLED: "false"
+      AUDIT_PEPPER: ${AUDIT_PEPPER:?AUDIT_PEPPER must be set in .env (32+ random chars)}
+      BLOCKCHAIN_INDEXER_ENABLED: ${BLOCKCHAIN_INDEXER_ENABLED:-false}
+      BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-}
+      BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}
+      JAVA_OPTS: "-Xms128m -Xmx512m -XX:+UseG1GC -XX:+ExitOnOutOfMemoryError"
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    restart: unless-stopped
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: http://localhost:8080/api
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8080/api}
     ports:
       - "5173:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
 
 volumes:
   pharma_pg_data:
