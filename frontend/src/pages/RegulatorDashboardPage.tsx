@@ -35,9 +35,9 @@ export default function RegulatorDashboardPage() {
       {analytics && (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="Продукты (metadata)" value={analytics.metadataRecords} />
-          <Stat label="Партии" value={analytics.batchMetadataRecords} />
+          <Stat label="Передачи" value={analytics.transferEvents} />
           <Stat label="Отзывы" value={analytics.recallEvents} />
-          <Stat label="Активные передачи" value={analytics.activeShipments} />
+          <Stat label="Всего событий" value={analytics.cachedEvents} />
         </section>
       )}
 

@@ -11,7 +11,7 @@ export function HistoryTimeline({ history }: { history: ProductHistoryItem[] }) 
       <h2 className="mb-4 text-lg font-semibold">Цепочка поставки (on-chain)</h2>
       <div className="space-y-4">
         {history.map((item, index) => (
-          <div key={`${item.timestamp}-${index}`} className="grid gap-3 border-l-2 border-emerald-500/50 pl-4">
+          <div key={historyKey(item, index)} className="grid gap-3 border-l-2 border-emerald-500/50 pl-4">
             <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
               <p className="font-medium text-slate-100">{translateAction(item.action)}</p>
               <span className="text-sm text-slate-500">{formatBlockchainDate(item.timestamp)}</span>
@@ -39,4 +39,16 @@ function translateAction(action: string) {
 
 function isZeroAddress(address: string) {
   return address.toLowerCase() === "0x0000000000000000000000000000000000000000";
+}
+
+/**
+ * Stable list key.  Falls back to (timestamp, index) only for the synthetic
+ * "Product created" record which carries a zero operationId on-chain.
+ */
+function historyKey(item: ProductHistoryItem, index: number) {
+  const zero = "0x0000000000000000000000000000000000000000000000000000000000000000";
+  if (item.operationId && item.operationId !== zero) {
+    return item.operationId;
+  }
+  return `${item.timestamp}-${index}`;
 }

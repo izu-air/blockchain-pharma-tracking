@@ -1,4 +1,6 @@
 app:
+  jwt:
+    secret: integration-test-secret-with-at-least-32-chars-aaaa
   security:
     require-authentication-for-mutations: false
 
