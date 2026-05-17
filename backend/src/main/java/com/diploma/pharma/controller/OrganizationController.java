@@ -5,6 +5,7 @@ import com.diploma.pharma.dto.OrganizationResponse;
 import com.diploma.pharma.service.OrganizationService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,11 +19,13 @@ public class OrganizationController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
     public OrganizationResponse create(@Valid @RequestBody OrganizationRequest request) {
         return service.create(request);
     }
 
     @GetMapping
+    @PreAuthorize("isAuthenticated()")
     public List<OrganizationResponse> findAll() {
         return service.findAll();
     }

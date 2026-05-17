@@ -5,6 +5,7 @@ import com.diploma.pharma.dto.ProductBatchMetadataResponse;
 import com.diploma.pharma.service.ProductBatchMetadataService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +19,7 @@ public class ProductBatchMetadataController {
     }
 
     @PostMapping
+    @PreAuthorize("hasRole('MANUFACTURER')")
     public ProductBatchMetadataResponse create(@Valid @RequestBody ProductBatchMetadataRequest request) {
         return service.create(request);
     }

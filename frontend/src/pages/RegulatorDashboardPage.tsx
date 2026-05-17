@@ -2,6 +2,7 @@ import { BarChart3, ShieldAlert } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useEffect, useState } from "react";
 import { getAnalyticsSummary } from "../lib/api";
+import { humanizeError } from "../lib/errors";
 import type { AnalyticsSummary } from "../types/product";
 
 export default function RegulatorDashboardPage() {
@@ -13,7 +14,7 @@ export default function RegulatorDashboardPage() {
       try {
         setAnalytics(await getAnalyticsSummary());
       } catch (exception) {
-        setError(exception instanceof Error ? exception.message : "Не удалось загрузить аналитику");
+        setError(humanizeError(exception, "Не удалось загрузить аналитику."));
       }
     })();
   }, []);
@@ -30,7 +31,11 @@ export default function RegulatorDashboardPage() {
         </div>
       </section>
 
-      {error && <p className="text-sm text-red-400">{error}</p>}
+      {error && (
+        <div role="alert" className="panel border-red-500/40 text-sm text-red-300">
+          <p className="break-words leading-snug">{error}</p>
+        </div>
+      )}
 
       {analytics && (
         <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

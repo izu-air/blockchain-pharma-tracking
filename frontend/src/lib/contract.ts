@@ -59,6 +59,55 @@ export function isValidAddress(value: string): boolean {
   return typeof value === "string" && ADDRESS_PATTERN.test(value.trim());
 }
 
+/**
+ * Pre-validates a value before sending it to ethers as `uint256`.
+ * ethers will throw a cryptic `invalid BigNumberish` if we don't catch
+ * non-numeric strings here.  Throwing a localized error early gives
+ * the user an actionable message.
+ */
+function requireUint(value: string, fieldName: string): bigint {
+  const trimmed = String(value ?? "").trim();
+  if (!/^\d+$/.test(trimmed)) {
+    throw new Error(
+      `Поле «${fieldName}» должно быть положительным числом (on-chain ID). ` +
+      `Получено: «${trimmed.slice(0, 32)}». Это не бизнес-номер партии, ` +
+      `а числовой идентификатор, который вернул контракт после createBatch.`
+    );
+  }
+  const parsed = BigInt(trimmed);
+  if (parsed <= 0n) {
+    throw new Error(`Поле «${fieldName}» должно быть положительным числом, получено ${parsed}.`);
+  }
+  return parsed;
+}
+
+/**
+ * Pre-validates an Ethereum address.  Surfaces a clean Russian error
+ * instead of letting ethers throw an internal exception deep inside the
+ * encoder.
+ */
+function requireAddress(value: string, fieldName: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!ADDRESS_PATTERN.test(trimmed)) {
+    throw new Error(`Поле «${fieldName}» должно быть Ethereum-адресом (0x + 40 hex символов).`);
+  }
+  return trimmed;
+}
+
+/**
+ * Pre-validates a serial number against the same character class enforced by
+ * SupplyChain.sol's createProduct.  Catches obvious typos before paying gas.
+ */
+function requireSerial(value: string, fieldName: string): string {
+  const trimmed = String(value ?? "").trim();
+  if (!/^[A-Za-z0-9._:\-]{3,64}$/.test(trimmed)) {
+    throw new Error(
+      `Поле «${fieldName}» должно содержать 3–64 символа: латиница, цифры или . : - _`
+    );
+  }
+  return trimmed;
+}
+
 export async function connectWallet() {
   const provider = await getProvider();
   await provider.send("eth_requestAccounts", []);
@@ -138,9 +187,15 @@ export async function createBatch(productionDate: number, expirationDate: number
 }
 
 export async function createProduct(batchId: string, name: string, serialNumber: string) {
+  const validBatchId = requireUint(batchId, "ID партии (on-chain)");
+  const validSerial  = requireSerial(serialNumber, "Серийный номер");
+  const cleanName    = String(name ?? "").trim();
+  if (cleanName.length < 2 || cleanName.length > 200) {
+    throw new Error("Название препарата должно быть от 2 до 200 символов.");
+  }
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.createProduct(batchId, name, serialNumber);
+  const tx = await contract.createProduct(validBatchId, cleanName, validSerial);
   const receipt = await tx.wait();
   const event = receipt.logs
     .map((log: unknown) => {
@@ -159,68 +214,83 @@ export async function createProduct(batchId: string, name: string, serialNumber:
 }
 
 export async function transferProduct(productId: string, newOwner: string) {
+  const validProductId = requireUint(productId, "ID продукта");
+  const validNewOwner = requireAddress(newOwner, "Адрес нового владельца");
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.transferProduct(productId, newOwner, operationId("transfer"));
+  const tx = await contract.transferProduct(validProductId, validNewOwner, operationId("transfer"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }
 
 export async function updateStatus(productId: string, status: ExtendedProductStatus) {
+  const validProductId = requireUint(productId, "ID продукта");
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.updateStatus(productId, status, operationId("status"));
+  const tx = await contract.updateStatus(validProductId, status, operationId("status"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }
 
 export async function recallBatch(batchId: string, reason: string) {
+  const validBatchId = requireUint(batchId, "ID партии");
+  const trimmed = String(reason ?? "").trim();
+  if (trimmed.length < 5) throw new Error("Причина отзыва должна быть не короче 5 символов.");
+  if (trimmed.length > 500) throw new Error("Причина отзыва не должна превышать 500 символов.");
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.recallBatch(batchId, reason, operationId("recall"));
+  const tx = await contract.recallBatch(validBatchId, trimmed, operationId("recall"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }
 
 export async function unrecallBatch(batchId: string, reason: string) {
+  const validBatchId = requireUint(batchId, "ID партии");
+  const trimmed = String(reason ?? "").trim();
+  if (trimmed.length < 5) throw new Error("Причина восстановления должна быть не короче 5 символов.");
+  if (trimmed.length > 500) throw new Error("Причина не должна превышать 500 символов.");
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
-  const tx = await contract.unrecallBatch(batchId, reason, operationId("unrecall"));
+  const tx = await contract.unrecallBatch(validBatchId, trimmed, operationId("unrecall"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }
 
 export async function getProduct(productId: string): Promise<Product> {
+  const validProductId = requireUint(productId, "ID продукта");
   const contract = await getSupplyChainContract(false);
-  return contract.getProduct(productId);
+  return contract.getProduct(validProductId);
 }
 
 export async function getProductBySerial(serialNumber: string): Promise<Product> {
   const contract = await getSupplyChainContract(false);
-  return contract.getProductBySerial(serialNumber);
+  return contract.getProductBySerial(String(serialNumber ?? "").trim());
 }
 
 export async function getProductIdBySerial(serialNumber: string): Promise<bigint> {
   const contract = await getSupplyChainContract(false);
-  return contract.getProductIdBySerial(serialNumber);
+  return contract.getProductIdBySerial(String(serialNumber ?? "").trim());
 }
 
 export async function getBatch(batchId: string): Promise<ProductBatch> {
+  const validBatchId = requireUint(batchId, "ID партии");
   const contract = await getSupplyChainContract(false);
-  return contract.getBatch(batchId);
+  return contract.getBatch(validBatchId);
 }
 
 export async function getProductHistory(productId: string): Promise<ProductHistoryItem[]> {
+  const validProductId = requireUint(productId, "ID продукта");
   const contract = await getSupplyChainContract(false);
-  return contract.getProductHistory(productId);
+  return contract.getProductHistory(validProductId);
 }
 
 export async function verifyProduct(productId: string): Promise<VerificationResult> {
+  const validProductId = requireUint(productId, "ID продукта");
   const contract = await getSupplyChainContract(false);
-  return contract.verifyProduct(productId);
+  return contract.verifyProduct(validProductId);
 }
 
 export async function verifyProductBySerial(serialNumber: string): Promise<VerificationResult> {
   const contract = await getSupplyChainContract(false);
-  return contract.verifyProductBySerial(serialNumber);
+  return contract.verifyProductBySerial(String(serialNumber ?? "").trim());
 }

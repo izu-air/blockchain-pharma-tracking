@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { saveProductEvent } from "../lib/api";
 import { isValidAddress, transferProduct, updateStatus } from "../lib/contract";
+import { humanizeError } from "../lib/errors";
 import { ResultMessage } from "../components/ResultMessage";
 import type { ExtendedProductStatus } from "../types/product";
 
@@ -40,7 +41,7 @@ export default function TransferProductPage() {
         transactionHash: hash
       });
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка выполнения операции");
+      setError(humanizeError(exception, "Не удалось выполнить операцию."));
     } finally {
       setLoading(false);
     }

@@ -5,7 +5,7 @@ import { ResultMessage } from "./ResultMessage";
 describe("ResultMessage", () => {
   it("renders transaction hash", () => {
     render(<ResultMessage txHash="0xabc" />);
-    expect(screen.getByText(/Транзакция отправлена/i)).toBeInTheDocument();
+    expect(screen.getByText(/Транзакция:/i)).toBeInTheDocument();
     expect(screen.getByText("0xabc")).toBeInTheDocument();
   });
 

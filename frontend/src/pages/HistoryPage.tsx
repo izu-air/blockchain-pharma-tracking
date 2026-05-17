@@ -3,6 +3,7 @@ import { HistoryTimeline } from "../components/HistoryTimeline";
 import { ProductCard } from "../components/ProductCard";
 import { getMetadata } from "../lib/api";
 import { getBatch, getProduct, getProductHistory, verifyProduct } from "../lib/contract";
+import { humanizeError } from "../lib/errors";
 import type { Product, ProductBatch, ProductHistoryItem, ProductMetadata, VerificationResult } from "../types/product";
 
 type HistoryPageProps = {
@@ -20,14 +21,19 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
   const [loading, setLoading] = useState(false);
 
   const loadById = useCallback(async (id: string) => {
+    const trimmed = id.trim();
+    if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) {
+      setError("ID продукта должен быть положительным числом.");
+      return;
+    }
     setLoading(true);
     setError("");
     try {
       const [loadedProduct, loadedHistory, loadedMetadata, loadedVerification] = await Promise.all([
-        getProduct(id),
-        getProductHistory(id),
-        getMetadata(id),
-        verifyProduct(id)
+        getProduct(trimmed),
+        getProductHistory(trimmed),
+        getMetadata(trimmed).catch(() => null),
+        verifyProduct(trimmed)
       ]);
       const loadedBatch = await getBatch(loadedProduct.batchId.toString());
       setProduct(loadedProduct);
@@ -36,7 +42,7 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
       setMetadata(loadedMetadata);
       setVerification(loadedVerification);
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Не удалось загрузить историю");
+      setError(humanizeError(exception, "Не удалось загрузить историю продукта."));
       setProduct(null);
       setBatch(null);
       setVerification(null);
@@ -71,12 +77,20 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
             value={productId}
             onChange={(event) => setProductId(event.target.value)}
             placeholder="Blockchain product ID"
+            inputMode="numeric"
+            pattern="\d+"
+            maxLength={20}
+            autoComplete="off"
           />
           <button className="button" onClick={() => loadById(productId)} disabled={loading}>
             {loading ? "Загрузка..." : "Показать историю"}
           </button>
         </div>
-        {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+        {error && (
+          <div role="alert" className="mt-3 rounded-lg border border-red-500/40 bg-red-950/40 p-2 text-sm text-red-200">
+            <p className="break-words leading-snug">{error}</p>
+          </div>
+        )}
       </section>
 
       {product && <ProductCard product={product} metadata={metadata} batch={batch} verification={verification} />}
