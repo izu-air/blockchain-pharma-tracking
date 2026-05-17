@@ -2,6 +2,7 @@ import { useState } from "react";
 import { QRCodeSVG } from "qrcode.react";
 import { saveBatchMetadata, saveMetadata, saveProductEvent } from "../lib/api";
 import { createBatch, createProduct, metadataHash, temperatureHash } from "../lib/contract";
+import { humanizeError } from "../lib/errors";
 import { toUnixDate } from "../lib/status";
 import { ResultMessage } from "../components/ResultMessage";
 
@@ -45,7 +46,7 @@ export default function RegisterProductPage() {
         });
       }
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка создания партии");
+      setError(humanizeError(exception, "Не удалось создать партию."));
     } finally {
       setLoading(false);
     }
@@ -77,7 +78,7 @@ export default function RegisterProductPage() {
         });
       }
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка регистрации продукта");
+      setError(humanizeError(exception, "Не удалось зарегистрировать продукт."));
     } finally {
       setLoading(false);
     }

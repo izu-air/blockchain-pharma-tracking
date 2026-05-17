@@ -2,6 +2,7 @@ import { useState } from "react";
 import { loginWithWallet, registerUser } from "../lib/api";
 import { clearStoredToken, setStoredToken } from "../lib/auth";
 import { isValidAddress } from "../lib/contract";
+import { humanizeError } from "../lib/errors";
 import { WalletConnector } from "../components/WalletConnector";
 
 const roles = ["MANUFACTURER", "DISTRIBUTOR", "PHARMACY", "REGULATOR", "CONSUMER"] as const;
@@ -32,7 +33,7 @@ export default function LoginPage() {
       setStoredToken(data.token);
       setMessage(`Выполнен вход. Роль backend: ${data.role}. JWT сохранён для API-запросов.`);
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка входа");
+      setError(humanizeError(exception, "Не удалось войти. Убедитесь, что кошелёк зарегистрирован."));
     } finally {
       setLoading(false);
     }
@@ -59,7 +60,7 @@ export default function LoginPage() {
       await registerUser({ name, role: regRole, walletAddress: wallet });
       setMessage("Пользователь зарегистрирован. Теперь выполните вход с этим адресом.");
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка регистрации");
+      setError(humanizeError(exception, "Не удалось зарегистрировать пользователя."));
     } finally {
       setLoading(false);
     }

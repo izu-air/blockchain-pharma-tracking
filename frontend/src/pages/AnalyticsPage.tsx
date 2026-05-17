@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getAnalyticsSummary } from "../lib/api";
+import { humanizeError } from "../lib/errors";
 import type { AnalyticsSummary } from "../types/product";
 import { MetricGridSkeleton } from "../components/Skeleton";
 
@@ -15,7 +16,7 @@ export default function AnalyticsPage() {
       .then((data) => { if (!cancelled) { setAnalytics(data); setError(""); } })
       .catch((exception) => {
         if (!cancelled) {
-          setError(exception instanceof Error ? exception.message : "Не удалось загрузить аналитику");
+          setError(humanizeError(exception, "Не удалось загрузить аналитику."));
         }
       })
       .finally(() => { if (!cancelled) setLoading(false); });
@@ -29,7 +30,11 @@ export default function AnalyticsPage() {
         <p className="mt-1 text-sm text-slate-400">Backend показывает кэшированные blockchain events и метаданные.</p>
       </section>
       {loading && <MetricGridSkeleton count={6} />}
-      {!loading && error && <div className="panel text-sm text-red-400">{error}</div>}
+      {!loading && error && (
+        <div role="alert" className="panel border-red-500/40 text-sm text-red-300">
+          <p className="break-words leading-snug">{error}</p>
+        </div>
+      )}
       {!loading && analytics && (
         <section className="grid gap-4 md:grid-cols-3">
           <Metric label="Метаданные продуктов" value={analytics.metadataRecords} />

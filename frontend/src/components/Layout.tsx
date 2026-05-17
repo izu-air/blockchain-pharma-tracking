@@ -44,7 +44,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[260px_1fr]">
+      <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[260px_minmax(0,1fr)]">
         <aside className={`${mobileOpen ? "block" : "hidden"} panel-dark md:block`}>
           <p className="mb-3 text-xs uppercase tracking-wide text-slate-400">Навигация</p>
           <nav className="space-y-1">
@@ -67,7 +67,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </nav>
         </aside>
 
-        <main className="space-y-6">{children}</main>
+        <main className="min-w-0 space-y-6">{children}</main>
       </div>
     </div>
   );

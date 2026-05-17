@@ -2,6 +2,7 @@ import { Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { clearStoredToken } from "../lib/auth";
 import { connectWallet, getWalletRoles, getProvider } from "../lib/contract";
+import { humanizeError } from "../lib/errors";
 import { formatAddress } from "../lib/status";
 
 export function WalletConnector() {
@@ -21,7 +22,7 @@ export function WalletConnector() {
       const address = await connectWallet();
       await syncWallet(address);
     } catch (exception) {
-      setError(exception instanceof Error ? exception.message : "Ошибка подключения кошелька");
+      setError(humanizeError(exception, "Не удалось подключить кошелёк."));
     }
   }
 
@@ -72,13 +73,21 @@ export function WalletConnector() {
   }, []);
 
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex min-w-0 max-w-[260px] flex-col items-end gap-1">
       <button className="button-secondary" onClick={handleConnect}>
         <Wallet size={18} />
-        {account ? formatAddress(account) : "Подключить MetaMask"}
+        <span className="font-mono">{account ? formatAddress(account) : "Подключить MetaMask"}</span>
       </button>
-      {error && <span className="text-xs text-red-600">{error}</span>}
-      {roles.length > 0 && <span className="max-w-[220px] truncate text-right text-xs text-slate-400">{roles.join(", ")}</span>}
+      {error && (
+        <span className="block max-w-full break-words text-right text-xs text-red-400">
+          {error}
+        </span>
+      )}
+      {roles.length > 0 && (
+        <span className="block max-w-full truncate text-right text-xs text-slate-400">
+          {roles.join(", ")}
+        </span>
+      )}
     </div>
   );
 }
