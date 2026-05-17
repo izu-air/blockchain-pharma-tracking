@@ -4,6 +4,7 @@ import com.diploma.pharma.entity.UserRole;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
@@ -16,10 +17,22 @@ import org.springframework.stereotype.Service;
 @Service
 public class JwtService {
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
+    /** Minimum secret length per OWASP recommendation for HS256. */
+    private static final int MIN_SECRET_LENGTH = 32;
 
     private final String secret;
 
-    public JwtService(@Value("${app.jwt.secret:change-this-demo-secret}") String secret) {
+    public JwtService(@Value("${app.jwt.secret:}") String secret) {
+        if (secret == null || secret.isBlank()) {
+            throw new IllegalStateException(
+                    "app.jwt.secret is not configured. Set the JWT_SECRET environment variable "
+                            + "(min 32 characters) before starting the application.");
+        }
+        if (secret.length() < MIN_SECRET_LENGTH) {
+            throw new IllegalStateException(
+                    "app.jwt.secret is too short: " + secret.length()
+                            + " characters. HS256 requires at least " + MIN_SECRET_LENGTH + ".");
+        }
         this.secret = secret;
     }
 
@@ -44,33 +57,48 @@ public class JwtService {
 
     /**
      * Verifies HMAC signature only (no expiry check). Prefer {@link #parseValidToken(String)} for authorization.
+     * Uses constant-time comparison to prevent timing attacks.
      */
     public boolean isValid(String token) {
         String[] parts = token.split("\\.");
         if (parts.length != 3) {
             return false;
         }
-        return sign(parts[0] + "." + parts[1]).equals(parts[2]);
+        return constantTimeEquals(sign(parts[0] + "." + parts[1]), parts[2]);
     }
 
     public Optional<ParsedJwt> parseValidToken(String token) {
         String[] parts = token.split("\\.");
-        if (parts.length != 3 || !sign(parts[0] + "." + parts[1]).equals(parts[2])) {
+        if (parts.length != 3 || !constantTimeEquals(sign(parts[0] + "." + parts[1]), parts[2])) {
             return Optional.empty();
         }
         try {
             byte[] decoded = Base64.getUrlDecoder().decode(parts[1]);
             JsonNode node = OBJECT_MAPPER.readTree(new String(decoded, StandardCharsets.UTF_8));
-            long exp = node.get("exp").asLong();
+            JsonNode expNode = node.get("exp");
+            JsonNode subNode = node.get("sub");
+            JsonNode roleNode = node.get("role");
+            if (expNode == null || subNode == null || roleNode == null) {
+                return Optional.empty();
+            }
+            long exp = expNode.asLong();
             if (Instant.now().getEpochSecond() >= exp) {
                 return Optional.empty();
             }
-            String sub = node.get("sub").asText();
-            UserRole role = UserRole.valueOf(node.get("role").asText());
-            return Optional.of(new ParsedJwt(sub, role));
+            return Optional.of(new ParsedJwt(subNode.asText(), UserRole.valueOf(roleNode.asText())));
         } catch (Exception exception) {
             return Optional.empty();
         }
+    }
+
+    /** Constant-time string comparison to mitigate timing side-channel attacks on the signature. */
+    private static boolean constantTimeEquals(String a, String b) {
+        if (a == null || b == null) {
+            return false;
+        }
+        byte[] ab = a.getBytes(StandardCharsets.UTF_8);
+        byte[] bb = b.getBytes(StandardCharsets.UTF_8);
+        return MessageDigest.isEqual(ab, bb);
     }
 
     private String sign(String value) {

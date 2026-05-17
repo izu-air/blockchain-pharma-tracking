@@ -25,6 +25,10 @@ public class SecurityConfig {
             JwtService jwtService,
             @Value("${app.security.require-authentication-for-mutations:true}") boolean requireAuthForMutations
     ) throws Exception {
+        // CSRF disabled — this is a stateless JSON API where authentication is
+        // carried in the Authorization header (never a cookie), so CSRF tokens
+        // would add no protection.  If session/cookie auth is ever introduced
+        // CSRF protection must be re-enabled at that point.
         http.csrf(csrf -> csrf.disable());
         http.cors(Customizer.withDefaults());
         http.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
@@ -36,10 +40,19 @@ public class SecurityConfig {
                 return;
             }
             auth.requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                    // Public auth + health endpoints
                     .requestMatchers("/api/auth/**").permitAll()
+                    .requestMatchers("/actuator/health/**", "/actuator/info").permitAll()
+                    // OpenAPI docs — restrict to non-prod via app.security flag if needed
                     .requestMatchers("/v3/api-docs/**", "/swagger-ui/**", "/swagger-ui.html", "/swagger-ui/index.html")
                     .permitAll()
+                    // Consumer-facing read endpoints (verify, history) stay public so
+                    // a buyer can scan a QR without logging in.  Sensitive read
+                    // endpoints (audit logs, raw events) require auth.
+                    .requestMatchers(HttpMethod.GET, "/api/audit-logs/**").authenticated()
+                    .requestMatchers(HttpMethod.GET, "/api/product-events/**").authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
+                    // Self-registration (POST /api/users) is intentionally public.
                     .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/**").authenticated()
                     .requestMatchers(HttpMethod.PUT, "/api/**").authenticated()
@@ -64,7 +77,9 @@ public class SecurityConfig {
         CorsConfiguration configuration = new CorsConfiguration();
         configuration.setAllowedOrigins(List.of(frontendOrigin.split(",")));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-        configuration.setAllowedHeaders(List.of("*"));
+        // Explicit allowlist (avoid wildcard which can interact badly with
+        // setAllowCredentials=true under stricter browser CORS policies).
+        configuration.setAllowedHeaders(List.of("Authorization", "Content-Type", "Accept", "X-Requested-With"));
         configuration.setAllowCredentials(true);
         configuration.setExposedHeaders(List.of("Authorization"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();

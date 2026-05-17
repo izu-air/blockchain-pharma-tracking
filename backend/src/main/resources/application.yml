@@ -15,17 +15,32 @@ spring:
     # но сообщение чаще указывает на реальную причину (connection refused / auth), а не только на dialect.
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      ddl-auto: update
+      # Default "update" keeps local development frictionless (Hibernate
+      # synchronises the schema from @Entity classes on startup).  For
+      # production deployments override HIBERNATE_DDL_AUTO=validate and
+      # manage schema with Flyway/Liquibase migrations to avoid silent
+      # data-mutating ALTERs at runtime.
+      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
     open-in-view: false
     properties:
       hibernate:
         format_sql: true
   sql:
     init:
-      mode: always
+      mode: never
 
 server:
   port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose only liveness/readiness — never expose env/heapdump/etc in prod.
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
 
 springdoc:
   swagger-ui:
@@ -41,6 +56,10 @@ blockchain:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:change-this-demo-secret}
+    # MUST be supplied via environment (JWT_SECRET).  The application fails
+    # to start otherwise — no plaintext default is provided on purpose so
+    # that a misconfigured deployment cannot accidentally accept forged
+    # tokens signed with a well-known string.
+    secret: ${JWT_SECRET:}
   security:
     require-authentication-for-mutations: ${REQUIRE_JWT_FOR_WRITES:true}
