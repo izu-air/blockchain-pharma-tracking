@@ -8,7 +8,7 @@ spring:
   datasource:
     url: jdbc:h2:mem:pharma_test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE
     username: sa
-    password: 
+    password:
     driver-class-name: org.h2.Driver
   jpa:
     hibernate:
@@ -19,6 +19,11 @@ spring:
   sql:
     init:
       mode: never
+  flyway:
+    # Migrations are PostgreSQL-specific (TIMESTAMPTZ, regex CHECKs); the
+    # integration tests run against H2, so Hibernate manages the test
+    # schema via ddl-auto: create-drop and Flyway stays disabled.
+    enabled: false
 
 
 blockchain:

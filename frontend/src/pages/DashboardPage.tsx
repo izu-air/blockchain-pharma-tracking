@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { getAnalyticsSummary } from "../lib/api";
 import type { AnalyticsSummary } from "../types/product";
+import { MetricGridSkeleton } from "../components/Skeleton";
 
 const cards = [
   { title: "Smart contract", text: "Хранит lifecycle, владельца, статус отзыва и неизменяемую историю.", icon: Blocks },
@@ -13,9 +14,17 @@ const cards = [
 
 export default function DashboardPage() {
   const [analytics, setAnalytics] = useState<AnalyticsSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
 
   useEffect(() => {
-    getAnalyticsSummary().then(setAnalytics).catch(() => setAnalytics(null));
+    let cancelled = false;
+    setLoading(true);
+    getAnalyticsSummary()
+      .then((data) => { if (!cancelled) { setAnalytics(data); setFailed(false); } })
+      .catch(() => { if (!cancelled) { setAnalytics(null); setFailed(true); } })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
   }, []);
 
   return (
@@ -33,13 +42,19 @@ export default function DashboardPage() {
         </div>
       </section>
 
-      {analytics && (
+      {loading && <MetricGridSkeleton count={4} />}
+      {!loading && analytics && (
         <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           <Metric label="Metadata records" value={analytics.metadataRecords} />
           <Metric label="Cached events" value={analytics.cachedEvents} />
           <Metric label="Recall events" value={analytics.recallEvents} />
           <Metric label="System health" value="Operational" />
         </section>
+      )}
+      {!loading && failed && (
+        <div className="panel text-sm text-slate-400">
+          Аналитика недоступна (backend не отвечает или эндпоинт защищён).
+        </div>
       )}
 
       <section className="grid gap-4 md:grid-cols-2">

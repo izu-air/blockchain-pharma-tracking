@@ -34,10 +34,11 @@ services:
       # is provided — the backend refuses to start without it.
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in .env (min 32 chars)}
       REQUIRE_JWT_FOR_WRITES: "true"
-      # docker-compose runs in dev mode: Hibernate creates/updates the schema
-      # automatically.  In a real production deployment set this to "validate"
-      # and run Flyway migrations explicitly.
-      HIBERNATE_DDL_AUTO: ${HIBERNATE_DDL_AUTO:-update}
+      # Flyway runs V*.sql migrations on startup; Hibernate is in validate
+      # mode and will refuse to start if the schema drifts from @Entity.
+      HIBERNATE_DDL_AUTO: ${HIBERNATE_DDL_AUTO:-validate}
+      FLYWAY_ENABLED: "true"
+      AUDIT_PEPPER: ${AUDIT_PEPPER:?AUDIT_PEPPER must be set in .env (32+ random chars)}
       BLOCKCHAIN_INDEXER_ENABLED: ${BLOCKCHAIN_INDEXER_ENABLED:-false}
       BLOCKCHAIN_RPC_URL: ${BLOCKCHAIN_RPC_URL:-}
       BLOCKCHAIN_CONTRACT_ADDRESS: ${BLOCKCHAIN_CONTRACT_ADDRESS:-}

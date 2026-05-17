@@ -2,8 +2,12 @@ package com.diploma.pharma.controller;
 
 import com.diploma.pharma.dto.AuditLogResponse;
 import com.diploma.pharma.service.AuditLogService;
-import java.util.List;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.data.domain.Page;
+import org.springframework.web.bind.annotation.CrossOrigin;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/audit-logs")
@@ -16,7 +20,10 @@ public class AuditLogController {
     }
 
     @GetMapping
-    public List<AuditLogResponse> recent() {
-        return service.recent();
+    public Page<AuditLogResponse> list(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "50") int size
+    ) {
+        return service.list(page, size);
     }
 }
