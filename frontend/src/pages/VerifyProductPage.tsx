@@ -6,7 +6,7 @@ import { ProductCard } from "../components/ProductCard";
 import { getMetadata } from "../lib/api";
 import { getBatch, getProduct, getProductBySerial, verifyProduct, verifyProductBySerial } from "../lib/contract";
 import { humanizeError } from "../lib/errors";
-import { extractSerialFromScan } from "../lib/qr";
+import { buildVerifyUrl, isQrTimestampStale, parseScan, type ScanPayload } from "../lib/qr";
 import { formatAddress, formatBlockchainDate, statusLabels } from "../lib/status";
 import type { Product, ProductBatch, ProductMetadata, VerificationResult } from "../types/product";
 
@@ -27,6 +27,7 @@ export default function VerifyProductPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
+  const [scanMeta, setScanMeta] = useState<ScanPayload | null>(null);
 
   const runVerify = useCallback(async (serial: string, explicitProductId: string | null) => {
     const trimmedSerial = serial.trim();
@@ -81,15 +82,16 @@ export default function VerifyProductPage() {
 
   const handleScanResult = useCallback((raw: string) => {
     setScannerOpen(false);
-    const serial = extractSerialFromScan(raw);
-    if (!serial) {
+    const parsed = parseScan(raw);
+    if (!parsed) {
       setError("QR-код распознан, но в нём нет валидного серийного номера.");
       return;
     }
-    setSerialNumber(serial);
+    setScanMeta(parsed);
+    setSerialNumber(parsed.serial);
     setProductId("");
-    setParams({ serial }, { replace: true });
-    void runVerify(serial, null);
+    setParams({ serial: parsed.serial }, { replace: true });
+    void runVerify(parsed.serial, null);
   }, [runVerify, setParams]);
 
   return (
@@ -191,11 +193,21 @@ export default function VerifyProductPage() {
 
       {product && <ProductCard product={product} metadata={metadata} batch={batch} verification={verification} />}
 
+      {scanMeta && scanMeta.timestamp && isQrTimestampStale(scanMeta) && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-950/30 p-3 text-sm text-amber-200">
+          <p className="break-words leading-snug">
+            ⚠ Этот QR-код был сгенерирован более года назад.
+            Возможно, ярлык устарел — проверьте дату годности продукта.
+          </p>
+        </div>
+      )}
+
       {product && (
         <section className="panel w-fit max-w-full">
           <QRCodeSVG
-            value={`${window.location.origin}/verify?serial=${encodeURIComponent(product.serialNumber)}`}
+            value={buildVerifyUrl(window.location.origin, product.serialNumber)}
             size={160}
+            level="M"
           />
           <p className="mt-2 text-center text-xs text-slate-400">QR с URL верификации</p>
         </section>

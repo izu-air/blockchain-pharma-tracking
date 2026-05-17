@@ -5,6 +5,7 @@ import com.diploma.pharma.dto.ProductMetadataResponse;
 import com.diploma.pharma.service.ProductMetadataService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,6 +19,7 @@ public class ProductMetadataController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY')")
     public ProductMetadataResponse create(@Valid @RequestBody ProductMetadataRequest request) {
         return service.create(request);
     }

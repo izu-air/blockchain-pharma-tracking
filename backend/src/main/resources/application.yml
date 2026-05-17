@@ -4,7 +4,7 @@ spring:
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/pharma_chain}
     username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:postgres}
+    password: ${DB_PASSWORD:332018}
     hikari:
       # Быстрее явный таймаут вместо долгого «висения», если PostgreSQL недоступен
       connection-timeout: 20000

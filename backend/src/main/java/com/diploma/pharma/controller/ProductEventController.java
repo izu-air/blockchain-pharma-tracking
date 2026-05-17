@@ -5,6 +5,7 @@ import com.diploma.pharma.dto.ProductEventResponse;
 import com.diploma.pharma.service.ProductEventService;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -18,11 +19,13 @@ public class ProductEventController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY','REGULATOR')")
     public ProductEventResponse create(@Valid @RequestBody ProductEventRequest request) {
         return service.create(request);
     }
 
     @GetMapping("/{blockchainProductId}")
+    @PreAuthorize("isAuthenticated()")
     public List<ProductEventResponse> findByProduct(@PathVariable Long blockchainProductId) {
         return service.findByProduct(blockchainProductId);
     }
