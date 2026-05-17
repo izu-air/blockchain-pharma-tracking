@@ -18,28 +18,32 @@ contract SupplyChain is AccessControl {
         Recalled
     }
 
+    // Storage layout note: bools are placed together near an address so the
+    // EVM packs them into the same slot as the address (address=20 bytes +
+    // bool 1 byte each fit into 32 bytes).  This saves one SSTORE per batch
+    // and per product over the naive layout.
     struct ProductBatch {
         uint256 batchId;
-        address manufacturer;
         uint256 productionDate;
         uint256 expirationDate;
-        bool recalled;
         bytes32 temperatureHash;
         bytes32 metadataHash;
-        bool exists;
+        address manufacturer; // 20 bytes
+        bool recalled;        // 1 byte   ─ packed with manufacturer
+        bool exists;          // 1 byte   ─ packed with manufacturer
     }
 
     struct Product {
         uint256 id;
         uint256 batchId;
+        uint256 createdAt;
+        address manufacturer; // 20 bytes
+        Status status;        // 1 byte   ─ packed
+        bool blocked;         // 1 byte   ─ packed
+        bool exists;          // 1 byte   ─ packed
+        address currentOwner; // 20 bytes ─ new slot (still cheaper than scattered)
         string name;
         string serialNumber;
-        address manufacturer;
-        address currentOwner;
-        uint256 createdAt;
-        Status status;
-        bool blocked;
-        bool exists;
     }
 
     struct ProductHistory {
@@ -287,8 +291,12 @@ contract SupplyChain is AccessControl {
             if (product.exists && product.status != Status.Sold) {
                 product.blocked = true;
                 product.status = Status.Recalled;
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.Recalled, reason, operationId);
-                emit ProductStatusUpdated(ids[i], Status.Recalled, msg.sender, operationId);
+                // Per-product operationId derived from the batch operationId
+                // so the audit trail stays unique while keeping the batch-level
+                // root cause traceable.
+                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
+                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.Recalled, reason, perProductOp);
+                emit ProductStatusUpdated(ids[i], Status.Recalled, msg.sender, perProductOp);
             }
         }
 
@@ -312,8 +320,9 @@ contract SupplyChain is AccessControl {
             if (product.exists && product.status == Status.Recalled) {
                 product.blocked = false;
                 product.status = Status.InTransit;
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, operationId);
-                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, operationId);
+                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
+                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, perProductOp);
+                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, perProductOp);
             }
         }
 

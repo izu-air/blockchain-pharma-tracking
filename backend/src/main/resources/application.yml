@@ -15,12 +15,10 @@ spring:
     # но сообщение чаще указывает на реальную причину (connection refused / auth), а не только на dialect.
     database-platform: org.hibernate.dialect.PostgreSQLDialect
     hibernate:
-      # Default "update" keeps local development frictionless (Hibernate
-      # synchronises the schema from @Entity classes on startup).  For
-      # production deployments override HIBERNATE_DDL_AUTO=validate and
-      # manage schema with Flyway/Liquibase migrations to avoid silent
-      # data-mutating ALTERs at runtime.
-      ddl-auto: ${HIBERNATE_DDL_AUTO:update}
+      # Default "validate" — Flyway owns schema evolution (V*__*.sql under
+      # src/main/resources/db/migration).  For ad-hoc local dev without
+      # Flyway, override HIBERNATE_DDL_AUTO=update or set FLYWAY_ENABLED=false.
+      ddl-auto: ${HIBERNATE_DDL_AUTO:validate}
     open-in-view: false
     properties:
       hibernate:
@@ -28,6 +26,11 @@ spring:
   sql:
     init:
       mode: never
+  flyway:
+    enabled: ${FLYWAY_ENABLED:true}
+    baseline-on-migrate: true
+    locations: classpath:db/migration
+    validate-on-migrate: true
 
 server:
   port: ${SERVER_PORT:8080}

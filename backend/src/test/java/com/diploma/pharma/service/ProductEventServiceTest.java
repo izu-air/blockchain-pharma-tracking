@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 @DataJpaTest
 @ActiveProfiles("test")
-@Import({ProductEventService.class, AuditLogService.class})
+@Import({ProductEventService.class, AuditLogService.class, WalletPseudonymizer.class})
 class ProductEventServiceTest {
     @Autowired
     private ProductEventService productEventService;

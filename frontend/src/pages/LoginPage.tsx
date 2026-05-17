@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { loginWithWallet, registerUser } from "../lib/api";
 import { clearStoredToken, setStoredToken } from "../lib/auth";
+import { isValidAddress } from "../lib/contract";
 import { WalletConnector } from "../components/WalletConnector";
 
 const roles = ["MANUFACTURER", "DISTRIBUTOR", "PHARMACY", "REGULATOR", "CONSUMER"] as const;
@@ -17,11 +18,17 @@ export default function LoginPage() {
 
   async function handleLogin(event: React.FormEvent) {
     event.preventDefault();
+    const value = walletAddress.trim();
+    if (!isValidAddress(value)) {
+      setError("Адрес кошелька должен начинаться с 0x и содержать 40 hex-символов.");
+      setMessage("");
+      return;
+    }
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      const data = await loginWithWallet(walletAddress.trim());
+      const data = await loginWithWallet(value);
       setStoredToken(data.token);
       setMessage(`Выполнен вход. Роль backend: ${data.role}. JWT сохранён для API-запросов.`);
     } catch (exception) {
@@ -33,15 +40,23 @@ export default function LoginPage() {
 
   async function handleRegister(event: React.FormEvent) {
     event.preventDefault();
+    const wallet = regWallet.trim();
+    const name = regName.trim();
+    if (!name) {
+      setError("Имя не может быть пустым.");
+      setMessage("");
+      return;
+    }
+    if (!isValidAddress(wallet)) {
+      setError("Адрес кошелька должен начинаться с 0x и содержать 40 hex-символов.");
+      setMessage("");
+      return;
+    }
     setLoading(true);
     setError("");
     setMessage("");
     try {
-      await registerUser({
-        name: regName.trim(),
-        role: regRole,
-        walletAddress: regWallet.trim()
-      });
+      await registerUser({ name, role: regRole, walletAddress: wallet });
       setMessage("Пользователь зарегистрирован. Теперь выполните вход с этим адресом.");
     } catch (exception) {
       setError(exception instanceof Error ? exception.message : "Ошибка регистрации");
@@ -69,6 +84,10 @@ export default function LoginPage() {
               value={walletAddress}
               onChange={(event) => setWalletAddress(event.target.value)}
               placeholder="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
+              pattern="0x[0-9a-fA-F]{40}"
+              maxLength={42}
+              autoComplete="off"
+              spellCheck={false}
               required
             />
           </label>
@@ -110,6 +129,10 @@ export default function LoginPage() {
               value={regWallet}
               onChange={(event) => setRegWallet(event.target.value)}
               placeholder="0x…"
+              pattern="0x[0-9a-fA-F]{40}"
+              maxLength={42}
+              autoComplete="off"
+              spellCheck={false}
               required
             />
           </label>
