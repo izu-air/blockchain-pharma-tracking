@@ -50,9 +50,15 @@ public class SecurityConfig {
                     .permitAll()
                     // Consumer-facing read endpoints (verify, history) stay public so
                     // a buyer can scan a QR without logging in.  Sensitive read
-                    // endpoints (audit logs, raw events) require auth.
+                    // endpoints (audit logs, analytics summary, raw events,
+                    // user listing) require auth + role check at the
+                    // controller (@PreAuthorize).
                     .requestMatchers(HttpMethod.GET, "/api/audit-logs/**").authenticated()
                     .requestMatchers(HttpMethod.GET, "/api/product-events/**").authenticated()
+                    .requestMatchers(HttpMethod.GET, "/api/analytics/**").authenticated()
+                    .requestMatchers(HttpMethod.GET, "/api/users").authenticated()
+                    // Public consumer routes: verifyProduct, batch-metadata read,
+                    // product-metadata read, organizations (listing), etc.
                     .requestMatchers(HttpMethod.GET, "/api/**").permitAll()
                     // Self-registration (POST /api/users) is intentionally public.
                     .requestMatchers(HttpMethod.POST, "/api/users").permitAll()

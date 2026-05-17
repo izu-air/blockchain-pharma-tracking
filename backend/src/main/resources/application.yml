@@ -2,9 +2,12 @@ spring:
   application:
     name: pharma-supply-chain
   datasource:
+    # Local-dev defaults match docs/local-setup.md (postgres/postgres).
+    # Production deployments inject DB_URL / DB_USER / DB_PASSWORD via env;
+    # docker-compose makes POSTGRES_PASSWORD a required ${...:?error} value.
     url: ${DB_URL:jdbc:postgresql://localhost:5432/pharma_chain}
     username: ${DB_USER:postgres}
-    password: ${DB_PASSWORD:332018}
+    password: ${DB_PASSWORD:postgres}
     hikari:
       # Быстрее явный таймаут вместо долгого «висения», если PostgreSQL недоступен
       connection-timeout: 20000
@@ -57,6 +60,13 @@ blockchain:
     chunk-size: ${BLOCKCHAIN_INDEXER_CHUNK:2000}
 
 app:
+  admin:
+    # Wallet (lower-case 0x-prefixed) that is auto-created as ADMIN at startup.
+    # Empty by default — set APP_ADMIN_WALLET in production to enable the
+    # bootstrap.  The wallet still needs to perform a SIWE login to receive
+    # a JWT; this just guarantees there is at least one ADMIN row in the DB.
+    wallet: ${APP_ADMIN_WALLET:}
+    name:   ${APP_ADMIN_NAME:System administrator}
   jwt:
     # MUST be supplied via environment (JWT_SECRET).  The application fails
     # to start otherwise — no plaintext default is provided on purpose so

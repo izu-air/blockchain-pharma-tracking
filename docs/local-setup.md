@@ -47,14 +47,16 @@ Create database:
 CREATE DATABASE pharma_chain;
 ```
 
-Default backend credentials are:
+Default backend credentials (matched by `application.yml` fallback):
 
 ```text
 user: postgres
 password: postgres
 ```
 
-They can be changed with `DB_USER` and `DB_PASSWORD`.
+They can be overridden with `DB_USER` and `DB_PASSWORD`.  If your local
+Postgres uses a different password, set `DB_PASSWORD` before launching the
+backend — otherwise startup fails with `password authentication failed`.
 
 ## 5. Run Backend
 
@@ -63,11 +65,31 @@ cd backend
 mvn spring-boot:run
 ```
 
+If you want an ADMIN user auto-created for your wallet (so you can manage
+other users), pass:
+
+```bash
+APP_ADMIN_WALLET=0xYourWallet APP_ADMIN_NAME="You" mvn spring-boot:run
+```
+
 API docs:
 
 ```text
 http://localhost:8080/swagger-ui/index.html
 ```
+
+### Logging in (wallet signature)
+
+The backend uses a SIWE-like flow — there is no password.
+
+1. `POST /api/auth/nonce { walletAddress }` — backend returns a one-time
+   `message` plus its `expiresAt`.
+2. Sign that exact message with MetaMask (`personal_sign`).
+3. `POST /api/auth/login { walletAddress, message, signature }` — backend
+   verifies the signature, marks the nonce consumed, and returns a JWT.
+
+The frontend Login page automates all three steps; just click "Войти
+подписью кошелька".
 
 ## 6. Run Frontend
 

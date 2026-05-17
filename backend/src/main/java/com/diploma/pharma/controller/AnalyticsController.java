@@ -2,6 +2,7 @@ package com.diploma.pharma.controller;
 
 import com.diploma.pharma.dto.AnalyticsResponse;
 import com.diploma.pharma.service.AnalyticsService;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -14,7 +15,13 @@ public class AnalyticsController {
         this.analyticsService = analyticsService;
     }
 
+    /**
+     * Aggregated counters across the supply chain.  Restricted to roles that
+     * legitimately need operational visibility — consumers can verify a
+     * specific product, but not browse system-wide totals.
+     */
     @GetMapping("/summary")
+    @PreAuthorize("hasAnyRole('ADMIN','REGULATOR','MANUFACTURER','DISTRIBUTOR','PHARMACY')")
     public AnalyticsResponse summary() {
         return analyticsService.summary();
     }

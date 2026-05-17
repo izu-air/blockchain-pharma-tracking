@@ -3,6 +3,7 @@ package com.diploma.pharma.controller;
 import com.diploma.pharma.dto.AuditLogResponse;
 import com.diploma.pharma.service.AuditLogService;
 import org.springframework.data.domain.Page;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -20,6 +21,7 @@ public class AuditLogController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAnyRole('ADMIN','REGULATOR')")
     public Page<AuditLogResponse> list(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "50") int size
