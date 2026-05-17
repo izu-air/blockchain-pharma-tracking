@@ -5,35 +5,50 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.Optional;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 @Service
 public class JwtService {
+    private static final Logger LOG = LoggerFactory.getLogger(JwtService.class);
     private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
     /** Minimum secret length per OWASP recommendation for HS256. */
     private static final int MIN_SECRET_LENGTH = 32;
 
     private final String secret;
 
-    public JwtService(@Value("${app.jwt.secret:}") String secret) {
-        if (secret == null || secret.isBlank()) {
-            throw new IllegalStateException(
-                    "app.jwt.secret is not configured. Set the JWT_SECRET environment variable "
-                            + "(min 32 characters) before starting the application.");
+    public JwtService(@Value("${app.jwt.secret:}") String configuredSecret) {
+        if (configuredSecret == null || configuredSecret.isBlank()) {
+            // Local-dev convenience: generate a strong ephemeral secret so the
+            // application boots without environment configuration.  Tokens
+            // signed by this secret do NOT survive a restart, which is exactly
+            // what we want — production deployments must set JWT_SECRET.
+            byte[] random = new byte[48];
+            new SecureRandom().nextBytes(random);
+            this.secret = Base64.getUrlEncoder().withoutPadding().encodeToString(random);
+            LOG.warn("=========================================================================");
+            LOG.warn(" app.jwt.secret is not configured.  Using an EPHEMERAL random secret.");
+            LOG.warn(" All JWTs issued during this run will be invalidated when the JVM exits.");
+            LOG.warn(" Set the JWT_SECRET environment variable (>= {} chars) for production.",
+                    MIN_SECRET_LENGTH);
+            LOG.warn("=========================================================================");
+            return;
         }
-        if (secret.length() < MIN_SECRET_LENGTH) {
+        if (configuredSecret.length() < MIN_SECRET_LENGTH) {
             throw new IllegalStateException(
-                    "app.jwt.secret is too short: " + secret.length()
+                    "app.jwt.secret is too short: " + configuredSecret.length()
                             + " characters. HS256 requires at least " + MIN_SECRET_LENGTH + ".");
         }
-        this.secret = secret;
+        this.secret = configuredSecret;
     }
 
     public record ParsedJwt(String walletAddress, UserRole role) {

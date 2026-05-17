@@ -10,7 +10,6 @@ spring:
       connection-timeout: 20000
       maximum-pool-size: 10
   jpa:
-    defer-datasource-initialization: true
     # Явный диалект: при недоступной БД Hibernate всё равно не создаст полноценный JdbcEnvironment,
     # но сообщение чаще указывает на реальную причину (connection refused / auth), а не только на dialect.
     database-platform: org.hibernate.dialect.PostgreSQLDialect
