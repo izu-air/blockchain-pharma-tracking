@@ -105,8 +105,9 @@ export default function VerifyProductPage() {
 
         <div className="mt-4 grid gap-3 md:grid-cols-[1fr_1fr_auto_auto]">
           <input
-            className="input min-w-0"
-            placeholder="Serial number (например, SN-DEMO-001)"
+            className="input min-w-0 font-mono"
+            aria-label="Серийный номер с упаковки"
+            placeholder="Серийный номер с упаковки (SN-DEMO-001)"
             value={serialNumber}
             onChange={(event) => setSerialNumber(event.target.value)}
             onKeyDown={(event) => {
@@ -120,8 +121,9 @@ export default function VerifyProductPage() {
             maxLength={128}
           />
           <input
-            className="input min-w-0"
-            placeholder="или blockchain product ID"
+            className="input min-w-0 font-mono"
+            aria-label="Blockchain product ID (число)"
+            placeholder="или Blockchain product ID (1, 2, 17 …)"
             value={productId}
             inputMode="numeric"
             pattern="\d+"

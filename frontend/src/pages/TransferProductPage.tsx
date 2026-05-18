@@ -5,20 +5,34 @@ import { humanizeError } from "../lib/errors";
 import { ResultMessage } from "../components/ResultMessage";
 import type { ExtendedProductStatus } from "../types/product";
 
+/**
+ * Two operations are intentionally on the same page because both target a
+ * single product by its blockchain product ID:
+ *
+ *   * `transferProduct` — move ownership to another supply-chain wallet
+ *   * `updateStatus`    — change lifecycle state (InTransit → Delivered → Sold)
+ *
+ * Reuses the same numeric on-chain product ID field; never asks the user
+ * for a DB primary key or a human-readable serial number.
+ */
 export default function TransferProductPage() {
-  const [productId, setProductId] = useState("1");
+  const [blockchainProductId, setBlockchainProductId] = useState("1");
   const [newOwner, setNewOwner] = useState("");
   const [status, setStatus] = useState<ExtendedProductStatus>(2);
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const productIdValid = /^\d+$/.test(productId) && Number(productId) > 0;
+  const productIdValid =
+      /^\d+$/.test(blockchainProductId) && Number(blockchainProductId) > 0;
   const newOwnerValid = isValidAddress(newOwner);
 
   async function run(action: "transfer" | "status") {
     if (!productIdValid) {
-      setError("ID продукта должен быть положительным числом.");
+      setError(
+        "Blockchain product ID должен быть положительным числом. " +
+        "Серийный номер (SN-…) и название препарата нужно вводить на странице верификации, не здесь."
+      );
       return;
     }
     if (action === "transfer" && !newOwnerValid) {
@@ -31,12 +45,12 @@ export default function TransferProductPage() {
 
     try {
       const hash = action === "transfer"
-        ? await transferProduct(productId, newOwner.trim())
-        : await updateStatus(productId, status);
+        ? await transferProduct(blockchainProductId, newOwner.trim())
+        : await updateStatus(blockchainProductId, status);
 
       setTxHash(hash);
       await saveProductEvent({
-        blockchainProductId: Number(productId),
+        blockchainProductId: Number(blockchainProductId),
         eventType: action === "transfer" ? "PRODUCT_TRANSFERRED" : "STATUS_UPDATED",
         transactionHash: hash
       });
@@ -51,10 +65,23 @@ export default function TransferProductPage() {
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="panel">
         <h2 className="text-xl font-semibold">Передача продукта</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Передаёт владение существующим продуктом другому участнику цепочки.
+          ID продукта — числовой on-chain идентификатор, выданный смарт-контрактом
+          при <code>createProduct</code>.
+        </p>
         <div className="mt-5 space-y-4">
-          <Field label="ID продукта" value={productId} onChange={setProductId} inputMode="numeric" pattern="\d+" />
+          <Field
+            label="Blockchain product ID (число)"
+            help="Числовой ID, например 1, 2, 17. Не путать с серийным номером SN-… (это строка на упаковке)."
+            value={blockchainProductId}
+            onChange={setBlockchainProductId}
+            inputMode="numeric"
+            pattern="\d+"
+          />
           <Field
             label="Адрес нового владельца"
+            help="Ethereum-адрес (0x + 40 hex), зарегистрированный как производитель, дистрибьютор или аптека."
             value={newOwner}
             onChange={setNewOwner}
             placeholder="0x..."
@@ -78,11 +105,26 @@ export default function TransferProductPage() {
 
       <section className="panel">
         <h2 className="text-xl font-semibold">Обновление статуса</h2>
+        <p className="mt-1 text-sm text-slate-400">
+          Меняет статус продукта в его жизненном цикле.  Допустимая
+          последовательность: Произведён → В пути → Доставлен → Продан.
+        </p>
         <div className="mt-5 space-y-4">
-          <Field label="ID продукта" value={productId} onChange={setProductId} inputMode="numeric" pattern="\d+" />
+          <Field
+            label="Blockchain product ID (число)"
+            help="Тот же числовой ID, что и в форме передачи."
+            value={blockchainProductId}
+            onChange={setBlockchainProductId}
+            inputMode="numeric"
+            pattern="\d+"
+          />
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Новый статус</span>
-            <select className="input" value={status} onChange={(event) => setStatus(Number(event.target.value) as ExtendedProductStatus)}>
+            <select
+              className="input"
+              value={status}
+              onChange={(event) => setStatus(Number(event.target.value) as ExtendedProductStatus)}
+            >
               <option value={1}>В пути</option>
               <option value={2}>Доставлен</option>
               <option value={3}>Продан</option>
@@ -101,7 +143,9 @@ export default function TransferProductPage() {
   );
 }
 
-function Field({ label, value, onChange, placeholder, pattern, maxLength, inputMode }: {
+function Field({
+  label, value, onChange, placeholder, pattern, maxLength, inputMode, help
+}: {
   label: string;
   value: string;
   onChange: (value: string) => void;
@@ -109,6 +153,7 @@ function Field({ label, value, onChange, placeholder, pattern, maxLength, inputM
   pattern?: string;
   maxLength?: number;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  help?: string;
 }) {
   return (
     <label className="block">
@@ -125,6 +170,7 @@ function Field({ label, value, onChange, placeholder, pattern, maxLength, inputM
         onChange={(event) => onChange(event.target.value)}
         required
       />
+      {help && <span className="mt-1 block text-xs text-slate-500">{help}</span>}
     </label>
   );
 }
