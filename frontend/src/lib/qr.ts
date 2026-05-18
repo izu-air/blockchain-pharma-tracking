@@ -67,19 +67,48 @@ export function extractSerialFromScan(raw: string): string | null {
 }
 
 /**
- * Build the canonical QR URL for a product. Adds nonce + timestamp + schema
- * version so future readers can distinguish issuer-signed and legacy QRs.
+ * Returns the base URL the QR should embed.  Prefer {@code VITE_PUBLIC_APP_URL}
+ * (e.g. {@code http://192.168.1.42:5173} for LAN testing or
+ * {@code https://app.example.com} in production); fall back to the
+ * browser-reported {@code window.location.origin} so dev still works.
  */
-export function buildVerifyUrl(origin: string, serial: string): string {
+export function resolveAppOrigin(fallback?: string): string {
+  const fromEnv = (import.meta as { env?: { VITE_PUBLIC_APP_URL?: string } })
+      .env?.VITE_PUBLIC_APP_URL;
+  if (fromEnv && fromEnv.trim()) {
+    return fromEnv.trim().replace(/\/+$/, "");
+  }
+  if (fallback && fallback.trim()) {
+    return fallback.trim().replace(/\/+$/, "");
+  }
+  if (typeof window !== "undefined" && window.location) {
+    return window.location.origin.replace(/\/+$/, "");
+  }
+  return "";
+}
+
+/**
+ * Build the canonical QR URL for a product.  Adds nonce + timestamp + schema
+ * version so future readers can distinguish issuer-signed and legacy QRs.
+ *
+ * <p>{@code origin} is optional — if omitted the helper uses
+ * {@link resolveAppOrigin}, which means a QR generated in dev on
+ * {@code http://localhost:5173} but with {@code VITE_PUBLIC_APP_URL} set
+ * to a LAN/production URL will point at the right host so a mobile scan
+ * works.</p>
+ */
+export function buildVerifyUrl(origin?: string, serial?: string): string {
+  const realSerial = serial ?? "";
+  const base = origin ? origin.replace(/\/+$/, "") : resolveAppOrigin();
   const params = new URLSearchParams({
-    serial,
+    serial: realSerial,
     nonce: typeof crypto !== "undefined" && "randomUUID" in crypto
         ? crypto.randomUUID()
         : Math.random().toString(36).slice(2),
     ts: String(Math.floor(Date.now() / 1000)),
     v: "1"
   });
-  return `${origin}/verify?${params.toString()}`;
+  return `${base}/verify?${params.toString()}`;
 }
 
 /**

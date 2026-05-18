@@ -11,7 +11,7 @@ type HistoryPageProps = {
 };
 
 export default function HistoryPage({ initialProductId }: HistoryPageProps) {
-  const [productId, setProductId] = useState(initialProductId || "1");
+  const [blockchainProductId, setBlockchainProductId] = useState(initialProductId || "1");
   const [product, setProduct] = useState<Product | null>(null);
   const [batch, setBatch] = useState<ProductBatch | null>(null);
   const [metadata, setMetadata] = useState<ProductMetadata | null>(null);
@@ -23,7 +23,10 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
   const loadById = useCallback(async (id: string) => {
     const trimmed = id.trim();
     if (!/^\d+$/.test(trimmed) || Number(trimmed) <= 0) {
-      setError("ID продукта должен быть положительным числом.");
+      setError(
+        "Blockchain product ID должен быть положительным числом " +
+        "(например, 1, 2, 17). Серийный номер SN-… вводите на странице «Проверка»."
+      );
       return;
     }
     setLoading(true);
@@ -54,7 +57,7 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
 
   useEffect(() => {
     if (initialProductId !== undefined && initialProductId !== "") {
-      setProductId(initialProductId);
+      setBlockchainProductId(initialProductId);
     }
   }, [initialProductId]);
 
@@ -70,19 +73,22 @@ export default function HistoryPage({ initialProductId }: HistoryPageProps) {
         <h2 className="text-xl font-semibold">История продукта</h2>
         <p className="mt-1 text-sm text-slate-400">
           Неизменяемая цепочка событий из смарт-контракта и метаданные из backend.
+          Введите числовой <strong>Blockchain product ID</strong> (его возвращает
+          контракт при создании продукта или его видно в событиях).
         </p>
         <div className="mt-4 flex flex-col gap-3 md:flex-row">
           <input
-            className="input md:max-w-xs"
-            value={productId}
-            onChange={(event) => setProductId(event.target.value)}
-            placeholder="Blockchain product ID"
+            className="input font-mono md:max-w-xs"
+            value={blockchainProductId}
+            onChange={(event) => setBlockchainProductId(event.target.value)}
+            placeholder="например: 1, 2, 17"
             inputMode="numeric"
             pattern="\d+"
             maxLength={20}
             autoComplete="off"
+            aria-label="Blockchain product ID"
           />
-          <button className="button" onClick={() => loadById(productId)} disabled={loading}>
+          <button className="button" onClick={() => loadById(blockchainProductId)} disabled={loading}>
             {loading ? "Загрузка..." : "Показать историю"}
           </button>
         </div>

@@ -87,6 +87,8 @@ contract SupplyChain is AccessControl {
     );
     event BatchRecalled(uint256 indexed batchId, address indexed regulator, string reason);
     event BatchUnrecalled(uint256 indexed batchId, address indexed regulator, string reason);
+    event ProductBlocked(uint256 indexed productId, address indexed regulator, string reason, bytes32 operationId);
+    event ProductUnblocked(uint256 indexed productId, address indexed regulator, string reason, bytes32 operationId);
     event ProductCreated(uint256 indexed productId, uint256 indexed batchId, string serialNumber, string name, address indexed manufacturer);
     event ProductTransferred(uint256 indexed productId, address indexed from, address indexed to, bytes32 operationId);
     event ProductStatusUpdated(uint256 indexed productId, Status status, address indexed actor, bytes32 operationId);
@@ -266,14 +268,12 @@ contract SupplyChain is AccessControl {
         return false;
     }
 
-    /**
-     * Recalls every non-sold product in the batch in one transaction.
-     *
-     * NOTE on gas: this loop is bounded by `batchProducts[batchId].length`.
-     * For the MVP we expect tens of products per batch, well within block
-     * gas limit. For larger production batches a paginated variant
-     * (`recallBatchRange(batchId, from, to, ...)`) should be added.
-     */
+    /// @notice O(1) batch recall. Sets batches[id].recalled = true and emits
+    /// BatchRecalled. verifyProduct treats every product whose batch is
+    /// recalled as recalled+blocked, without mutating per-product state.
+    /// Avoids the previous gas-DoS risk of looping over batchProducts, and
+    /// preserves per-product lifecycle so an unrecall does not need to
+    /// remember each product's prior status.
     function recallBatch(uint256 batchId, string calldata reason, bytes32 operationId)
         external
         onlyRole(REGULATOR_ROLE)
@@ -284,25 +284,13 @@ contract SupplyChain is AccessControl {
         require(bytes(reason).length > 0, "Recall reason is required");
 
         batches[batchId].recalled = true;
-
-        uint256[] memory ids = batchProducts[batchId];
-        for (uint256 i = 0; i < ids.length; i++) {
-            Product storage product = products[ids[i]];
-            if (product.exists && product.status != Status.Sold) {
-                product.blocked = true;
-                product.status = Status.Recalled;
-                // Per-product operationId derived from the batch operationId
-                // so the audit trail stays unique while keeping the batch-level
-                // root cause traceable.
-                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.Recalled, reason, perProductOp);
-                emit ProductStatusUpdated(ids[i], Status.Recalled, msg.sender, perProductOp);
-            }
-        }
-
         emit BatchRecalled(batchId, msg.sender, reason);
     }
 
+    /// @notice O(1) batch unrecall. Per-product status is preserved
+    /// (Sold stays Sold, InTransit stays InTransit). Pair with
+    /// blockProduct / unblockProduct for product-level intervention that
+    /// needs to survive an unrecall.
     function unrecallBatch(uint256 batchId, string calldata reason, bytes32 operationId)
         external
         onlyRole(REGULATOR_ROLE)
@@ -313,20 +301,47 @@ contract SupplyChain is AccessControl {
         require(bytes(reason).length > 0, "Unrecall reason is required");
 
         batches[batchId].recalled = false;
-
-        uint256[] memory ids = batchProducts[batchId];
-        for (uint256 i = 0; i < ids.length; i++) {
-            Product storage product = products[ids[i]];
-            if (product.exists && product.status == Status.Recalled) {
-                product.blocked = false;
-                product.status = Status.InTransit;
-                bytes32 perProductOp = keccak256(abi.encode(operationId, ids[i]));
-                _appendHistory(ids[i], msg.sender, product.currentOwner, product.currentOwner, Status.InTransit, reason, perProductOp);
-                emit ProductStatusUpdated(ids[i], Status.InTransit, msg.sender, perProductOp);
-            }
-        }
-
         emit BatchUnrecalled(batchId, msg.sender, reason);
+    }
+
+    /**
+     * Per-product block (independent of batch-level recall).  Use this when
+     * regulator needs to surgically pull a single unit off the market without
+     * recalling the whole batch.  Idempotent: blocking an already-blocked
+     * product is a no-op revert.
+     */
+    function blockProduct(uint256 productId, string calldata reason, bytes32 operationId)
+        external
+        onlyRole(REGULATOR_ROLE)
+        productExists(productId)
+        uniqueOperation(operationId)
+    {
+        require(!products[productId].blocked, "Product already blocked");
+        require(bytes(reason).length > 0, "Block reason is required");
+        products[productId].blocked = true;
+        _appendHistory(
+            productId, msg.sender,
+            products[productId].currentOwner, products[productId].currentOwner,
+            products[productId].status, reason, operationId
+        );
+        emit ProductBlocked(productId, msg.sender, reason, operationId);
+    }
+
+    function unblockProduct(uint256 productId, string calldata reason, bytes32 operationId)
+        external
+        onlyRole(REGULATOR_ROLE)
+        productExists(productId)
+        uniqueOperation(operationId)
+    {
+        require(products[productId].blocked, "Product is not blocked");
+        require(bytes(reason).length > 0, "Unblock reason is required");
+        products[productId].blocked = false;
+        _appendHistory(
+            productId, msg.sender,
+            products[productId].currentOwner, products[productId].currentOwner,
+            products[productId].status, reason, operationId
+        );
+        emit ProductUnblocked(productId, msg.sender, reason, operationId);
     }
 
     function getProduct(uint256 productId)
@@ -403,7 +418,7 @@ contract SupplyChain is AccessControl {
             authentic: product.exists && batch.exists,
             recalled: batch.recalled || product.status == Status.Recalled,
             expired: expired,
-            blocked: product.blocked,
+            blocked: product.blocked || batch.recalled,
             status: product.status,
             currentOwner: product.currentOwner,
             batchId: product.batchId,
@@ -431,7 +446,7 @@ contract SupplyChain is AccessControl {
             authentic: product.exists && batch.exists,
             recalled: batch.recalled || product.status == Status.Recalled,
             expired: expired,
-            blocked: product.blocked,
+            blocked: product.blocked || batch.recalled,
             status: product.status,
             currentOwner: product.currentOwner,
             batchId: product.batchId,

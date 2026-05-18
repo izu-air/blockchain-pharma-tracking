@@ -4,20 +4,24 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { NavLink } from "react-router-dom";
-import { useWallet } from "./WalletContext";
+import { useAuth } from "../context/AuthContext";
+import { useWallet } from "../context/WalletContext";
+import { hasAnyRole, type Role } from "../lib/roles";
 import { WalletConnector } from "./WalletConnector";
-import type { Role } from "../lib/roles";
-import { hasAnyRole } from "../lib/roles";
 
 interface NavItem {
   to: string;
   label: string;
   icon: typeof LayoutDashboard;
-  /** Empty = visible to everyone (public link); otherwise restrict to roles. */
+  /**
+   * Empty = visible to everyone (public).  Otherwise the link is shown
+   * when EITHER the connected wallet's on-chain roles OR the JWT's
+   * backend role intersect this allow-list (defense-in-depth UX).
+   */
   roles: Role[];
 }
 
-const NAV: NavItem[] = [
+export const NAV: NavItem[] = [
   { to: "/",             label: "Главная",       icon: LayoutDashboard, roles: [] },
   { to: "/verify",       label: "Проверка",      icon: PackageCheck,    roles: [] },
   { to: "/login",        label: "Вход",          icon: LogIn,           roles: [] },
@@ -31,17 +35,33 @@ const NAV: NavItem[] = [
   { to: "/analytics",    label: "Аналитика",     icon: BarChart3,       roles: ["MANUFACTURER", "DISTRIBUTOR", "PHARMACY", "REGULATOR", "ADMIN"] }
 ];
 
+/**
+ * Pure function — exported for unit testing.  Returns the subset of
+ * navigation entries visible to a user with the given backend (JWT) role
+ * and on-chain wallet roles.
+ */
+export function filterNavLinks(
+  items: NavItem[],
+  backendRole: Role | null,
+  walletRoles: Role[],
+  hasWallet: boolean
+): NavItem[] {
+  return items.filter((item) => {
+    if (item.roles.length === 0) return true;
+    const backendMatch = backendRole != null && item.roles.includes(backendRole);
+    const walletMatch = hasWallet && hasAnyRole(walletRoles, item.roles);
+    return backendMatch || walletMatch;
+  });
+}
+
 export function Layout({ children }: { children: React.ReactNode }) {
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { roles, address } = useWallet();
+  const wallet = useWallet();
+  const auth = useAuth();
 
-  // If no wallet connected → show only public links (Главная, Проверка, Вход).
-  // If connected → show public links + role-matched links.
-  const visibleNav = NAV.filter((item) => {
-    if (item.roles.length === 0) return true;
-    if (!address) return false;
-    return hasAnyRole(roles, item.roles);
-  });
+  const visibleNav = filterNavLinks(
+    NAV, auth.backendRole, wallet.roles, Boolean(wallet.address)
+  );
 
   return (
     <div className="min-h-screen bg-app text-slate-100">
@@ -67,6 +87,16 @@ export function Layout({ children }: { children: React.ReactNode }) {
           </div>
           <WalletConnector />
         </div>
+        {wallet.address && wallet.wrongChain && (
+          <div className="border-t border-amber-500/40 bg-amber-950/40 px-4 py-2 text-xs text-amber-200">
+            <span className="font-semibold">Внимание:</span> MetaMask в сети{" "}
+            <span className="font-mono">{wallet.chainId}</span>; контракт
+            развёрнут в сети <span className="font-mono">{wallet.expectedChainId}</span>.{" "}
+            <button type="button" className="underline" onClick={() => void wallet.switchChain()}>
+              Переключить
+            </button>
+          </div>
+        )}
       </header>
 
       <div className="mx-auto grid w-full max-w-7xl gap-6 px-4 py-6 md:grid-cols-[260px_minmax(0,1fr)]">
@@ -90,9 +120,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
               );
             })}
           </nav>
-          {address && roles.length === 0 && (
+          {wallet.address && wallet.roles.length === 0 && !auth.backendRole && (
             <p className="mt-4 rounded-lg bg-amber-500/10 p-2 text-xs text-amber-200">
-              У вашего кошелька нет назначенных on-chain ролей. Обратитесь к администратору.
+              У вашего кошелька нет назначенных on-chain ролей и нет JWT.  Подключитесь
+              как зарегистрированный участник, чтобы увидеть рабочие разделы.
             </p>
           )}
         </aside>

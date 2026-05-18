@@ -109,31 +109,45 @@ describe("SupplyChain", function () {
     expect(product.status).to.equal(3);
   });
 
-  it("recalls a batch and blocks product sale", async function () {
+  it("recalls a batch O(1) and blocks downstream operations", async function () {
     const { supplyChain, manufacturer, distributor, pharmacy, regulator } = await createBatchAndProduct();
 
     await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d"));
     await supplyChain.connect(distributor).transferProduct(1, pharmacy.address, op("d-to-p"));
 
-    await expect(
-      supplyChain.connect(regulator).recallBatch(1, "Temperature violation", op("recall"))
-    ).to.emit(supplyChain, "BatchRecalled");
+    // recallBatch flips a single flag — no per-product loop, no per-product
+    // event emitted.  Should remain a single BatchRecalled event.
+    const tx = await supplyChain.connect(regulator)
+        .recallBatch(1, "Temperature violation", op("recall"));
+    const receipt = await tx.wait();
+    const productStatusEvents = receipt.logs
+        .map(l => { try { return supplyChain.interface.parseLog(l as never); } catch { return null; } })
+        .filter(e => e?.name === "ProductStatusUpdated");
+    expect(productStatusEvents.length).to.equal(0);
 
+    // Downstream operation reverts with the new batch-level message.
     await expect(
       supplyChain.connect(pharmacy).updateStatus(1, 3, op("sale-after-recall"))
-    ).to.be.revertedWith("Product is blocked");
+    ).to.be.revertedWith("Product batch is recalled");
 
     const verification = await supplyChain.verifyProduct(1);
     expect(verification.authentic).to.equal(true);
     expect(verification.recalled).to.equal(true);
+    // Effective blocked = product.blocked || batch.recalled  → true after batch recall
     expect(verification.blocked).to.equal(true);
+    // Per-product lifecycle preserved — status not destructively mutated
+    const product = await supplyChain.getProduct(1);
+    expect(product.status).to.equal(1); // InTransit, not Recalled (4)
   });
 
-  it("allows regulator to unrecalled a batch", async function () {
+  it("allows regulator to unrecall a batch and preserves per-product status", async function () {
     const { supplyChain, manufacturer, distributor, regulator } = await createBatchAndProduct();
 
     await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d-unrecall"));
-    await supplyChain.connect(regulator).recallBatch(1, "Temperature violation", op("recall-before-unrecall"));
+    const statusBefore = (await supplyChain.getProduct(1)).status;
+
+    await supplyChain.connect(regulator)
+        .recallBatch(1, "Temperature violation", op("recall-before-unrecall"));
     await expect(
       supplyChain.connect(regulator).unrecallBatch(1, "Investigation cleared batch", op("unrecall"))
     ).to.emit(supplyChain, "BatchUnrecalled");
@@ -141,6 +155,52 @@ describe("SupplyChain", function () {
     const verification = await supplyChain.verifyProductBySerial("SN-DEMO-001");
     expect(verification.recalled).to.equal(false);
     expect(verification.blocked).to.equal(false);
+
+    // Per-product status survived the round-trip unchanged.
+    const statusAfter = (await supplyChain.getProduct(1)).status;
+    expect(statusAfter).to.equal(statusBefore);
+  });
+
+  it("allows regulator to block a single product without recalling the batch", async function () {
+    const { supplyChain, manufacturer, distributor, pharmacy, regulator } = await createBatchAndProduct();
+
+    await supplyChain.connect(manufacturer).transferProduct(1, distributor.address, op("m-to-d-block"));
+
+    await expect(
+      supplyChain.connect(regulator).blockProduct(1, "Suspicious individual unit", op("block-1"))
+    ).to.emit(supplyChain, "ProductBlocked");
+
+    // Batch flag is unchanged
+    const batch = await supplyChain.getBatch(1);
+    expect(batch.recalled).to.equal(false);
+
+    // Per-product operation is blocked
+    await expect(
+      supplyChain.connect(distributor).transferProduct(1, pharmacy.address, op("after-block"))
+    ).to.be.revertedWith("Product is blocked");
+
+    // Verification reflects the block
+    const verification = await supplyChain.verifyProduct(1);
+    expect(verification.blocked).to.equal(true);
+    expect(verification.recalled).to.equal(false);
+
+    // Unblock makes it usable again
+    await expect(
+      supplyChain.connect(regulator).unblockProduct(1, "Re-tested OK", op("unblock-1"))
+    ).to.emit(supplyChain, "ProductUnblocked");
+    const after = await supplyChain.verifyProduct(1);
+    expect(after.blocked).to.equal(false);
+  });
+
+  it("rejects non-regulator block / unblock", async function () {
+    const { supplyChain, manufacturer, attacker } = await createBatchAndProduct();
+
+    await expect(
+      supplyChain.connect(manufacturer).blockProduct(1, "x", op("nope-block"))
+    ).to.be.reverted;
+    await expect(
+      supplyChain.connect(attacker).unblockProduct(1, "x", op("nope-unblock"))
+    ).to.be.reverted;
   });
 
   it("returns immutable product history", async function () {

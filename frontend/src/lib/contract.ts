@@ -118,6 +118,17 @@ export async function connectWallet() {
   return signer.getAddress();
 }
 
+/**
+ * Personal-sign the given message with the wallet currently connected to
+ * MetaMask.  Maps user rejection / missing wallet errors to clean exceptions
+ * so the auth flow can surface a localised message.
+ */
+export async function signLoginMessage(message: string): Promise<string> {
+  const provider = await getProvider();
+  const signer = await provider.getSigner();
+  return signer.signMessage(message);
+}
+
 export async function getSupplyChainContract(withSigner = false) {
   if (!contractAddress) {
     throw new Error("Адрес контракта не задан в VITE_CONTRACT_ADDRESS.");

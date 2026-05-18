@@ -10,15 +10,13 @@ public interface ProductEventRepository extends JpaRepository<ProductEvent, Long
 
     long countByEventType(String eventType);
 
-    boolean existsByTransactionHashAndEventTypeAndBlockchainProductId(
+    /**
+     * Looks up the canonical event row for the V5 uniqueness key.  Used by
+     * {@code ProductEventService.create} when an INSERT loses the race to a
+     * concurrent writer and needs to read back the existing row.
+     */
+    Optional<ProductEvent> findFirstByTransactionHashAndEventTypeOrderByIdDesc(
             String transactionHash,
-            String eventType,
-            Long blockchainProductId
-    );
-
-    Optional<ProductEvent> findFirstByTransactionHashAndEventTypeAndBlockchainProductIdOrderByIdDesc(
-            String transactionHash,
-            String eventType,
-            Long blockchainProductId
+            String eventType
     );
 }

@@ -55,14 +55,50 @@ async function readApiError(response: Response, fallback: string): Promise<strin
   return httpErrorMessage(response.status, fallback);
 }
 
-export async function loginWithWallet(walletAddress: string) {
-  const response = await apiFetch("/auth/login", {
+export interface NonceResponse {
+  walletAddress: string;
+  message: string;
+  expiresAt: string;
+}
+
+/**
+ * Step 1 of wallet-signature login: ask the backend to issue a one-time
+ * challenge that the wallet must sign with personal_sign.
+ */
+export async function requestLoginNonce(walletAddress: string): Promise<NonceResponse> {
+  const response = await apiFetch("/auth/nonce", {
     method: "POST",
     body: JSON.stringify({ walletAddress })
   });
   if (!response.ok) {
-    if (response.status === 401 || response.status === 404) {
-      throw new Error("Кошелёк не зарегистрирован. Создайте пользователя через форму регистрации.");
+    throw new Error(await readApiError(response, "Не удалось получить challenge."));
+  }
+  return response.json() as Promise<NonceResponse>;
+}
+
+/**
+ * Step 2: submit walletAddress + the original challenge + the wallet's
+ * signature.  The backend verifies the signature, consumes the nonce, and
+ * returns a JWT.
+ */
+export async function loginWithSignature(
+    walletAddress: string,
+    message: string,
+    signature: string
+) {
+  const response = await apiFetch("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ walletAddress, message, signature })
+  });
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error("Кошелёк не зарегистрирован. Сначала создайте пользователя.");
+    }
+    if (response.status === 403) {
+      throw new Error("Подпись не подтверждена. Попробуйте подписать сообщение ещё раз.");
+    }
+    if (response.status === 401) {
+      throw new Error("Требуется авторизация.");
     }
     throw new Error(await readApiError(response, "Не удалось войти."));
   }

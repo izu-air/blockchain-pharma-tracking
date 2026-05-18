@@ -6,19 +6,24 @@ import { recallBatch, unrecallBatch } from "../lib/contract";
 import { humanizeError } from "../lib/errors";
 
 export default function RecallPage() {
-  const [batchId, setBatchId] = useState("1");
+  const [blockchainBatchId, setBlockchainBatchId] = useState("1");
   const [reason, setReason] = useState("Нарушение температурного режима при транспортировке");
   const [txHash, setTxHash] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const batchIdValid = /^\d+$/.test(batchId) && Number(batchId) > 0;
+  const batchIdValid =
+      /^\d+$/.test(blockchainBatchId) && Number(blockchainBatchId) > 0;
   const reasonValid = reason.trim().length >= 5;
 
   async function handleRecall(event: React.FormEvent, mode: "recall" | "unrecall") {
     event.preventDefault();
     if (!batchIdValid) {
-      setError("ID партии должен быть положительным числом.");
+      setError(
+        "Blockchain batch ID должен быть положительным числом " +
+        "(тот же, что выдаёт contract.createBatch). Не вводите сюда BATCH-2026-001 — " +
+        "это бизнес-метка, она хранится в off-chain метаданных."
+      );
       return;
     }
     if (!reasonValid) {
@@ -31,14 +36,17 @@ export default function RecallPage() {
 
     try {
       const hash = mode === "recall"
-          ? await recallBatch(batchId, reason.trim())
-          : await unrecallBatch(batchId, reason.trim());
+          ? await recallBatch(blockchainBatchId, reason.trim())
+          : await unrecallBatch(blockchainBatchId, reason.trim());
       setTxHash(hash);
+      // Indexer is the source of truth — this manual write is only a UX cache
+      // (will be removed in Iteration 8).  For batch events, no per-product
+      // record makes sense, so we record nothing here.
       await saveProductEvent({
-        blockchainProductId: Number(batchId),
+        blockchainProductId: 0,
         eventType: mode === "recall" ? "BATCH_RECALLED" : "BATCH_UNRECALLED",
         transactionHash: hash
-      });
+      }).catch(() => undefined);
     } catch (exception) {
       setError(humanizeError(
           exception,
@@ -62,16 +70,24 @@ export default function RecallPage() {
 
       <form className="space-y-4" onSubmit={(event) => handleRecall(event, "recall")}>
         <label className="block">
-          <span className="mb-1 block text-sm font-medium">ID партии</span>
+          <span className="mb-1 block text-sm font-medium">
+            Blockchain batch ID (число)
+          </span>
           <input
-            className="input"
-            value={batchId}
-            onChange={(event) => setBatchId(event.target.value)}
+            className="input font-mono"
+            value={blockchainBatchId}
+            onChange={(event) => setBlockchainBatchId(event.target.value)}
             inputMode="numeric"
             pattern="\d+"
             autoComplete="off"
+            placeholder="например: 1, 2, 17"
             required
           />
+          <span className="mt-1 block text-xs text-slate-500">
+            Числовой ID, который контракт выдал при <code>createBatch</code>.{" "}
+            Это <em>не</em> номер партии BATCH-2026-001 — тот хранится в
+            off-chain метаданных под именем <code>batchNumber</code>.
+          </span>
         </label>
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Причина отзыва</span>
@@ -83,7 +99,7 @@ export default function RecallPage() {
             required
           />
           <span className="mt-1 block text-xs text-slate-500">
-            {reason.length} / 500 символов
+            {reason.length} / 500 символов — сохраняется on-chain в событии BatchRecalled.
           </span>
         </label>
         <div className="flex flex-wrap gap-3">

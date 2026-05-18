@@ -1,7 +1,7 @@
 import { Wallet } from "lucide-react";
 import { formatAddress } from "../lib/status";
 import { ROLE_LABEL_RU } from "../lib/roles";
-import { useWallet } from "./WalletContext";
+import { useWallet } from "../context/WalletContext";
 
 /**
  * Кнопка подключения MetaMask + индикатор активного адреса/ролей.

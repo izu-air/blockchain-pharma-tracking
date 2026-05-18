@@ -1,132 +1,158 @@
 import { useState } from "react";
-import { loginWithWallet, registerUser } from "../lib/api";
-import { clearStoredToken, setStoredToken } from "../lib/auth";
-import { isValidAddress } from "../lib/contract";
+import { LogIn, ShieldCheck } from "lucide-react";
+import { registerUser } from "../lib/api";
+import { connectWallet, isValidAddress } from "../lib/contract";
 import { humanizeError } from "../lib/errors";
-import { WalletConnector } from "../components/WalletConnector";
+import { ROLE_LABEL_RU } from "../lib/roles";
+import { useAuth } from "../context/AuthContext";
+import { useWallet } from "../context/WalletContext";
 
-const roles = ["MANUFACTURER", "DISTRIBUTOR", "PHARMACY", "REGULATOR", "CONSUMER"] as const;
+// Anonymous self-registration only allows CONSUMER; privileged roles must
+// be created by an authenticated ADMIN via the back-office workflow.
+const SELF_REGISTRABLE_ROLES = ["CONSUMER"] as const;
 
 export default function LoginPage() {
-  const [walletAddress, setWalletAddress] = useState("");
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(false);
+  const wallet = useWallet();
+  const auth = useAuth();
 
+  // Registration state — public self-registration is CONSUMER-only;
+  // privileged accounts must be created by an authenticated ADMIN via
+  // back-office workflow (out of scope for this page).
   const [regName, setRegName] = useState("");
   const [regWallet, setRegWallet] = useState("");
-  const [regRole, setRegRole] = useState<(typeof roles)[number]>("MANUFACTURER");
+  const [regRole] = useState<(typeof SELF_REGISTRABLE_ROLES)[number]>("CONSUMER");
+  const [regMessage, setRegMessage] = useState("");
+  const [regError, setRegError] = useState("");
+  const [regLoading, setRegLoading] = useState(false);
 
-  async function handleLogin(event: React.FormEvent) {
-    event.preventDefault();
-    const value = walletAddress.trim();
-    if (!isValidAddress(value)) {
-      setError("Адрес кошелька должен начинаться с 0x и содержать 40 hex-символов.");
-      setMessage("");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    setMessage("");
+  /**
+   * Triggers the auth-context SIWE flow.  The context owns the JWT and
+   * step machine; this page only renders status.
+   */
+  async function handleSiweLogin() {
     try {
-      const data = await loginWithWallet(value);
-      setStoredToken(data.token);
-      setMessage(`Выполнен вход. Роль backend: ${data.role}. JWT сохранён для API-запросов.`);
-    } catch (exception) {
-      setError(humanizeError(exception, "Не удалось войти. Убедитесь, что кошелёк зарегистрирован."));
-    } finally {
-      setLoading(false);
+      let address = wallet.address;
+      if (!address) {
+        await wallet.connect();
+        address = (await connectWallet()).toLowerCase();
+      }
+      if (!address) throw new Error("Кошелёк не подключён.");
+      await auth.loginWithWallet(address);
+    } catch {
+      // Error is already on auth.error / wallet.error; nothing to do here.
     }
   }
 
   async function handleRegister(event: React.FormEvent) {
     event.preventDefault();
-    const wallet = regWallet.trim();
+    setRegError("");
+    setRegMessage("");
+    const walletAddress = regWallet.trim();
     const name = regName.trim();
     if (!name) {
-      setError("Имя не может быть пустым.");
-      setMessage("");
+      setRegError("Имя не может быть пустым.");
       return;
     }
-    if (!isValidAddress(wallet)) {
-      setError("Адрес кошелька должен начинаться с 0x и содержать 40 hex-символов.");
-      setMessage("");
+    if (!isValidAddress(walletAddress)) {
+      setRegError("Адрес кошелька должен начинаться с 0x и содержать 40 hex-символов.");
       return;
     }
-    setLoading(true);
-    setError("");
-    setMessage("");
+    setRegLoading(true);
     try {
-      await registerUser({ name, role: regRole, walletAddress: wallet });
-      setMessage("Пользователь зарегистрирован. Теперь выполните вход с этим адресом.");
+      await registerUser({ name, role: regRole, walletAddress });
+      setRegMessage("Пользователь зарегистрирован. Теперь войдите через MetaMask тем же кошельком.");
     } catch (exception) {
-      setError(humanizeError(exception, "Не удалось зарегистрировать пользователя."));
+      setRegError(humanizeError(exception, "Не удалось зарегистрировать пользователя."));
     } finally {
-      setLoading(false);
+      setRegLoading(false);
     }
   }
+
+  const stepLabel: Record<typeof auth.loginStep, string> = {
+    "idle":                "",
+    "requesting-nonce":    "Запрашиваем одноразовый challenge…",
+    "awaiting-signature":  "Подпишите сообщение в MetaMask.",
+    "verifying":           "Проверяем подпись на сервере…",
+    "done":                ""
+  };
+  const busy = auth.isLoggingIn;
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
       <section className="panel">
-        <h2 className="text-xl font-semibold">Вход (JWT)</h2>
-        <p className="mt-2 text-sm text-slate-400">
-          Backend защищает операции записи (метаданные, события). Войдите кошельком, который есть в таблице
-          пользователей (см. <span className="font-mono text-xs">data.sql</span> для Hardhat-аккаунтов).
-        </p>
-        <div className="mt-4">
-          <WalletConnector />
+        <div className="mb-3 flex items-center gap-2">
+          <ShieldCheck className="text-emerald-300" size={20} />
+          <h2 className="text-xl font-semibold">Вход через MetaMask</h2>
         </div>
-        <form className="mt-5 space-y-4" onSubmit={handleLogin}>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-300">Адрес кошелька (0x…)</span>
-            <input
-              className="input"
-              value={walletAddress}
-              onChange={(event) => setWalletAddress(event.target.value)}
-              placeholder="0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
-              pattern="0x[0-9a-fA-F]{40}"
-              maxLength={42}
-              autoComplete="off"
-              spellCheck={false}
-              required
-            />
-          </label>
-          <div className="flex flex-wrap gap-2">
-            <button className="button" type="submit" disabled={loading}>
-              {loading ? "Запрос..." : "Получить JWT"}
-            </button>
-            <button
-              type="button"
-              className="button-secondary"
-              onClick={() => {
-                clearStoredToken();
-                setMessage("JWT удалён из браузера.");
-                setError("");
-              }}
-            >
-              Сбросить JWT
-            </button>
+        <p className="text-sm text-slate-400">
+          Сервер выдаёт одноразовый challenge, вы подписываете его кошельком MetaMask,
+          сервер проверяет подпись и выдаёт JWT.  Пароль не используется и не хранится.
+        </p>
+
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button
+            type="button"
+            className="button"
+            onClick={() => void handleSiweLogin()}
+            disabled={busy}
+          >
+            <LogIn size={18} />
+            {busy ? "В процессе…" : wallet.address ? "Войти подписью кошелька" : "Подключить и войти"}
+          </button>
+          <button type="button" className="button-secondary" onClick={() => auth.logout()}>
+            Сбросить JWT
+          </button>
+        </div>
+
+        {busy && (
+          <div className="mt-4 rounded-lg border border-emerald-500/30 bg-emerald-950/20 p-3 text-sm text-emerald-200">
+            <p className="break-words leading-snug">{stepLabel[auth.loginStep]}</p>
           </div>
-        </form>
-        {message && <p className="mt-4 text-sm text-emerald-300">{message}</p>}
-        {error && <p className="mt-4 text-sm text-red-400">{error}</p>}
+        )}
+        {auth.isAuthenticated && auth.backendRole && (
+          <div className="mt-4 rounded-lg border border-emerald-500/40 bg-emerald-950/30 p-3 text-sm text-emerald-100">
+            <p className="break-words">
+              Готово. JWT сохранён. Роль backend:{" "}
+              <span className="font-semibold">{ROLE_LABEL_RU[auth.backendRole]}</span>.
+            </p>
+          </div>
+        )}
+        {auth.error && (
+          <div role="alert" className="mt-4 rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-200">
+            <p className="break-words leading-snug">{auth.error}</p>
+          </div>
+        )}
+
+        {wallet.address && (
+          <p className="mt-4 break-all text-xs text-slate-500">
+            Текущий wallet: <span className="font-mono">{wallet.address}</span>
+          </p>
+        )}
       </section>
 
       <section className="panel">
         <h2 className="text-xl font-semibold">Регистрация участника</h2>
         <p className="mt-2 text-sm text-slate-400">
-          Публичный POST <span className="font-mono text-xs">/api/users</span> — добавьте свой адрес MetaMask, если его ещё нет в базе.
+          Анонимная регистрация создаёт только базового потребителя.
+          Для роли MANUFACTURER / DISTRIBUTOR / PHARMACY / REGULATOR обратитесь к
+          администратору — он создаст вашу учётную запись через защищённый эндпоинт.
         </p>
         <form className="mt-5 space-y-4" onSubmit={handleRegister}>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-300">Имя</span>
-            <input className="input" value={regName} onChange={(event) => setRegName(event.target.value)} required />
+            <input
+              className="input"
+              value={regName}
+              onChange={(event) => setRegName(event.target.value)}
+              maxLength={200}
+              autoComplete="off"
+              required
+            />
           </label>
           <label className="block">
             <span className="mb-1 block text-sm font-medium text-slate-300">Кошелёк</span>
             <input
-              className="input"
+              className="input font-mono"
               value={regWallet}
               onChange={(event) => setRegWallet(event.target.value)}
               placeholder="0x…"
@@ -137,20 +163,21 @@ export default function LoginPage() {
               required
             />
           </label>
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-slate-300">Роль (off-chain)</span>
-            <select className="input" value={regRole} onChange={(event) => setRegRole(event.target.value as (typeof roles)[number])}>
-              {roles.map((role) => (
-                <option key={role} value={role}>
-                  {role}
-                </option>
-              ))}
-            </select>
-          </label>
-          <button className="button-secondary" type="submit" disabled={loading}>
-            Зарегистрировать
+          <p className="text-xs text-slate-500">
+            Публичная регистрация создаёт пользователя с ролью{" "}
+            <span className="font-semibold text-slate-300">CONSUMER</span> (только просмотр и
+            QR-верификация).  Privileged роли назначает администратор через back-office.
+          </p>
+          <button className="button-secondary" type="submit" disabled={regLoading}>
+            {regLoading ? "Регистрация…" : "Зарегистрировать"}
           </button>
         </form>
+        {regMessage && <p className="mt-4 break-words text-sm text-emerald-300">{regMessage}</p>}
+        {regError && (
+          <div role="alert" className="mt-4 rounded-lg border border-red-500/40 bg-red-950/40 p-3 text-sm text-red-200">
+            <p className="break-words leading-snug">{regError}</p>
+          </div>
+        )}
       </section>
     </div>
   );
