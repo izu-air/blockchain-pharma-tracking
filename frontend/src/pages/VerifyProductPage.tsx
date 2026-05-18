@@ -207,7 +207,7 @@ export default function VerifyProductPage() {
       {product && (
         <section className="panel w-fit max-w-full">
           <QRCodeSVG
-            value={buildVerifyUrl(window.location.origin, product.serialNumber)}
+            value={buildVerifyUrl(undefined, product.serialNumber)}
             size={160}
             level="M"
           />

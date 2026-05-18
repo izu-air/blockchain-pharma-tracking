@@ -20,30 +20,24 @@ public class ProductEventService {
     }
 
     /**
-     * Idempotent insert: relies on the composite unique index
-     * (transaction_hash, event_type, blockchain_product_id) at the database
-     * level rather than a pre-check, which would race under concurrent
-     * indexer / controller writes.
+     * Idempotent insert.  Relies on the V5 composite unique index
+     * (transaction_hash, coalesce(log_index,-1), event_type) at the DB level —
+     * not a pre-check — so concurrent indexer / API writes can't race.
      */
     @Transactional
     public ProductEventResponse create(ProductEventRequest request) {
-        ProductEvent event = new ProductEvent();
-        event.setBlockchainProductId(request.blockchainProductId());
-        event.setEventType(request.eventType());
-        event.setTransactionHash(request.transactionHash());
+        ProductEvent event = toEntity(request);
         try {
             ProductEvent saved = repository.saveAndFlush(event);
-            auditLogService.record("frontend", request.eventType(), "BLOCKCHAIN_EVENT",
-                    request.blockchainProductId().toString(), request.transactionHash());
+            auditLogService.record(
+                    "indexer-or-frontend", request.eventType(), "BLOCKCHAIN_EVENT",
+                    String.valueOf(request.blockchainProductId() != null ? request.blockchainProductId() : 0),
+                    request.transactionHash());
             return toResponse(saved);
         } catch (DataIntegrityViolationException duplicate) {
-            // Another writer already persisted this event — return the existing record.
-            return repository
-                    .findFirstByTransactionHashAndEventTypeAndBlockchainProductIdOrderByIdDesc(
-                            request.transactionHash(),
-                            request.eventType(),
-                            request.blockchainProductId()
-                    )
+            // Already persisted by another writer — return the existing row.
+            return repository.findFirstByTransactionHashAndEventTypeOrderByIdDesc(
+                            request.transactionHash(), request.eventType())
                     .map(this::toResponse)
                     .orElseThrow(() -> duplicate);
         }
@@ -57,12 +51,26 @@ public class ProductEventService {
                 .toList();
     }
 
+    private ProductEvent toEntity(ProductEventRequest request) {
+        ProductEvent event = new ProductEvent();
+        event.setBlockchainProductId(request.blockchainProductId());
+        event.setBlockchainBatchId(request.blockchainBatchId());
+        event.setEventType(request.eventType());
+        event.setTransactionHash(request.transactionHash());
+        event.setBlockNumber(request.blockNumber());
+        event.setLogIndex(request.logIndex());
+        return event;
+    }
+
     private ProductEventResponse toResponse(ProductEvent event) {
         return new ProductEventResponse(
                 event.getId(),
                 event.getBlockchainProductId(),
+                event.getBlockchainBatchId(),
                 event.getEventType(),
                 event.getTransactionHash(),
+                event.getBlockNumber(),
+                event.getLogIndex(),
                 event.getCreatedAt()
         );
     }

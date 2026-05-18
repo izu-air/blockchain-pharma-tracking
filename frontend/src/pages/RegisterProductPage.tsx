@@ -314,7 +314,7 @@ export default function RegisterProductPage() {
  */
 function ProductQrPanel({ productId, serialNumber }: { productId: string; serialNumber: string }) {
   const qrUrl = useMemo(
-    () => buildVerifyUrl(window.location.origin, serialNumber),
+    () => buildVerifyUrl(undefined, serialNumber),
     [serialNumber]
   );
   return (

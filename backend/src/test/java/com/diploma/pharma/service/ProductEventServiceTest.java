@@ -54,8 +54,11 @@ class ProductEventServiceTest {
 
         ProductEventRequest request = new ProductEventRequest(
                 1L,
+                null,
                 "PRODUCT_CREATED",
-                "0x0000000000000000000000000000000000000000000000000000000000000000"
+                "0x0000000000000000000000000000000000000000000000000000000000000000",
+                null,
+                null
         );
 
         productEventService.create(request);

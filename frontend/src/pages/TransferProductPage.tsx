@@ -1,19 +1,25 @@
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
 import { saveProductEvent } from "../lib/api";
-import { isValidAddress, transferProduct, updateStatus } from "../lib/contract";
+import { getProduct, isValidAddress, transferProduct, updateStatus } from "../lib/contract";
 import { humanizeError } from "../lib/errors";
+import {
+  isPositiveIntegerString, STATUS_LABELS_RU, validateStatusTransition
+} from "../lib/validation";
 import { ResultMessage } from "../components/ResultMessage";
 import type { ExtendedProductStatus } from "../types/product";
 
+const FORWARD_STATUSES: ExtendedProductStatus[] = [1, 2, 3];
+
 /**
- * Two operations are intentionally on the same page because both target a
- * single product by its blockchain product ID:
+ * Two operations on one page because both target a numeric on-chain
+ * product ID:
+ *   * transferProduct — move ownership
+ *   * updateStatus    — monotonic status machine
  *
- *   * `transferProduct` — move ownership to another supply-chain wallet
- *   * `updateStatus`    — change lifecycle state (InTransit → Delivered → Sold)
- *
- * Reuses the same numeric on-chain product ID field; never asks the user
- * for a DB primary key or a human-readable serial number.
+ * For the status form we preload the product from the chain so we can
+ * disable the current status option and any invalid forward transition —
+ * the user never gets to send a tx that we already know will revert.
  */
 export default function TransferProductPage() {
   const [blockchainProductId, setBlockchainProductId] = useState("1");
@@ -23,15 +29,43 @@ export default function TransferProductPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const productIdValid =
-      /^\d+$/.test(blockchainProductId) && Number(blockchainProductId) > 0;
+  // Live snapshot of the product, used to drive the status form UX
+  const [currentStatus, setCurrentStatus] = useState<ExtendedProductStatus | null>(null);
+  const [loadingProduct, setLoadingProduct] = useState(false);
+  const [productError, setProductError] = useState("");
+
+  const productIdValid = isPositiveIntegerString(blockchainProductId);
   const newOwnerValid = isValidAddress(newOwner);
+  const transition = currentStatus != null
+      ? validateStatusTransition(currentStatus, status)
+      : { ok: true } as const;
+
+  const loadCurrentProduct = useCallback(async () => {
+    if (!isPositiveIntegerString(blockchainProductId)) {
+      setCurrentStatus(null);
+      setProductError("");
+      return;
+    }
+    setLoadingProduct(true);
+    setProductError("");
+    try {
+      const product = await getProduct(blockchainProductId);
+      setCurrentStatus(Number(product.status) as ExtendedProductStatus);
+    } catch (exception) {
+      setCurrentStatus(null);
+      setProductError(humanizeError(exception, "Не удалось загрузить продукт."));
+    } finally {
+      setLoadingProduct(false);
+    }
+  }, [blockchainProductId]);
+
+  useEffect(() => { void loadCurrentProduct(); }, [loadCurrentProduct]);
 
   async function run(action: "transfer" | "status") {
     if (!productIdValid) {
       setError(
         "Blockchain product ID должен быть положительным числом. " +
-        "Серийный номер (SN-…) и название препарата нужно вводить на странице верификации, не здесь."
+        "Серийный номер (SN-…) вводите на странице «Проверка», не здесь."
       );
       return;
     }
@@ -39,6 +73,17 @@ export default function TransferProductPage() {
       setError("Адрес нового владельца должен начинаться с 0x и содержать 40 hex-символов.");
       return;
     }
+    if (action === "status") {
+      if (currentStatus == null) {
+        setError("Дождитесь, пока загрузится текущий статус продукта, и повторите.");
+        return;
+      }
+      if (!transition.ok) {
+        setError(transition.reason);
+        return;
+      }
+    }
+
     setLoading(true);
     setError("");
     setTxHash("");
@@ -53,13 +98,25 @@ export default function TransferProductPage() {
         blockchainProductId: Number(blockchainProductId),
         eventType: action === "transfer" ? "PRODUCT_TRANSFERRED" : "STATUS_UPDATED",
         transactionHash: hash
-      });
+      }).catch(() => undefined);
+      // Refresh status snapshot so the UI reflects the new value
+      if (action === "status") {
+        setCurrentStatus(status);
+      } else {
+        void loadCurrentProduct();
+      }
     } catch (exception) {
       setError(humanizeError(exception, "Не удалось выполнить операцию."));
     } finally {
       setLoading(false);
     }
   }
+
+  const statusOptionDisabled = (option: ExtendedProductStatus): { disabled: boolean; reason: string } => {
+    if (currentStatus == null) return { disabled: false, reason: "" };
+    const check = validateStatusTransition(currentStatus, option);
+    return { disabled: !check.ok, reason: check.ok ? "" : check.reason };
+  };
 
   return (
     <div className="grid gap-6 lg:grid-cols-2">
@@ -94,6 +151,7 @@ export default function TransferProductPage() {
             </p>
           )}
           <button
+            type="button"
             className="button"
             disabled={loading || !productIdValid || !newOwnerValid}
             onClick={() => run("transfer")}
@@ -118,6 +176,24 @@ export default function TransferProductPage() {
             inputMode="numeric"
             pattern="\d+"
           />
+          <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-sm text-slate-300">
+            {loadingProduct ? (
+              <span className="inline-flex items-center gap-2 text-slate-400">
+                <Loader2 className="animate-spin" size={14} /> Загрузка статуса…
+              </span>
+            ) : currentStatus != null ? (
+              <span>
+                Текущий статус:{" "}
+                <span className="font-semibold text-emerald-300">
+                  {STATUS_LABELS_RU[currentStatus]}
+                </span>
+              </span>
+            ) : productError ? (
+              <span className="text-amber-300">{productError}</span>
+            ) : (
+              <span className="text-slate-500">Введите ID, чтобы увидеть текущий статус.</span>
+            )}
+          </div>
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Новый статус</span>
             <select
@@ -125,12 +201,32 @@ export default function TransferProductPage() {
               value={status}
               onChange={(event) => setStatus(Number(event.target.value) as ExtendedProductStatus)}
             >
-              <option value={1}>В пути</option>
-              <option value={2}>Доставлен</option>
-              <option value={3}>Продан</option>
+              {FORWARD_STATUSES.map((option) => {
+                const info = statusOptionDisabled(option);
+                return (
+                  <option
+                    key={option}
+                    value={option}
+                    disabled={info.disabled}
+                    title={info.reason}
+                  >
+                    {STATUS_LABELS_RU[option]}{info.disabled ? " — недоступно" : ""}
+                  </option>
+                );
+              })}
             </select>
+            {!transition.ok && (
+              <span className="mt-1 block text-xs text-amber-400">{transition.reason}</span>
+            )}
           </label>
-          <button className="button" disabled={loading || !productIdValid} onClick={() => run("status")}>
+          <button
+            type="button"
+            className="button"
+            disabled={
+              loading || !productIdValid || currentStatus == null || !transition.ok
+            }
+            onClick={() => run("status")}
+          >
             Обновить статус
           </button>
         </div>
