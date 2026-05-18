@@ -14,6 +14,22 @@ public interface AuthNonceRepository extends JpaRepository<AuthNonce, Long> {
     Optional<AuthNonce> findByNonceHash(String nonceHash);
 
     /**
+     * Atomic one-shot consumption.  Marks the row used iff it is currently
+     * active (not consumed AND not expired) — and reports how many rows were
+     * affected.  Two concurrent {@code /api/auth/login} requests carrying the
+     * same signed message can both reach the service layer, but the database
+     * guarantees only one of them gets {@code affected = 1}; the other gets 0
+     * and must reject the login.
+     */
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("update AuthNonce n "
+         + "   set n.used = true, n.usedAt = :now "
+         + " where n.nonceHash = :hash "
+         + "   and n.used = false "
+         + "   and n.expiresAt > :now")
+    int markUsedIfActive(@Param("hash") String hash, @Param("now") Instant now);
+
+    /**
      * Daily cleanup: remove every nonce that is either expired or already used
      * older than the {@code cutoff} (used nonces are kept briefly for audit).
      */
