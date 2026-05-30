@@ -1,4 +1,4 @@
-import { BrowserProvider, Contract, id, solidityPackedKeccak256, toUtf8Bytes } from "ethers";
+import { BrowserProvider, Contract, id, keccak256, solidityPackedKeccak256, toUtf8Bytes } from "ethers";
 import type { ExtendedProductStatus, Product, ProductBatch, ProductHistoryItem, VerificationResult } from "../types/product";
 
 export const supplyChainAbi = [
@@ -8,16 +8,20 @@ export const supplyChainAbi = [
   "function PHARMACY_ROLE() view returns (bytes32)",
   "function REGULATOR_ROLE() view returns (bytes32)",
   "function hasRole(bytes32 role, address account) view returns (bool)",
+  "function grantRole(bytes32 role, address account)",
+  "function revokeRole(bytes32 role, address account)",
   "function createBatch(uint256 productionDate,uint256 expirationDate,bytes32 temperatureHash,bytes32 metadataHash) returns (uint256)",
   "function createProduct(uint256 batchId,string name,string serialNumber) returns (uint256)",
   "function transferProduct(uint256 productId,address newOwner,bytes32 operationId)",
   "function updateStatus(uint256 productId,uint8 newStatus,bytes32 operationId)",
   "function recallBatch(uint256 batchId,string reason,bytes32 operationId)",
   "function unrecallBatch(uint256 batchId,string reason,bytes32 operationId)",
-  "function getProduct(uint256 productId) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
-  "function getProductBySerial(string serialNumber) view returns (tuple(uint256 id,uint256 batchId,string name,string serialNumber,address manufacturer,address currentOwner,uint256 createdAt,uint8 status,bool blocked,bool exists))",
+  "function blockProduct(uint256 productId,string reason,bytes32 operationId)",
+  "function unblockProduct(uint256 productId,string reason,bytes32 operationId)",
+  "function getProduct(uint256 productId) view returns (tuple(uint256 id,uint256 batchId,uint256 createdAt,address manufacturer,uint8 status,bool blocked,bool exists,address currentOwner,string name,string serialNumber))",
+  "function getProductBySerial(string serialNumber) view returns (tuple(uint256 id,uint256 batchId,uint256 createdAt,address manufacturer,uint8 status,bool blocked,bool exists,address currentOwner,string name,string serialNumber))",
   "function getProductIdBySerial(string serialNumber) view returns (uint256)",
-  "function getBatch(uint256 batchId) view returns (tuple(uint256 batchId,address manufacturer,uint256 productionDate,uint256 expirationDate,bool recalled,bytes32 temperatureHash,bytes32 metadataHash,bool exists))",
+  "function getBatch(uint256 batchId) view returns (tuple(uint256 batchId,uint256 productionDate,uint256 expirationDate,bytes32 temperatureHash,bytes32 metadataHash,address manufacturer,bool recalled,bool exists))",
   "function getBatchProducts(uint256 batchId) view returns (uint256[])",
   "function getProductHistory(uint256 productId) view returns (tuple(uint256 timestamp,address actor,address previousOwner,address newOwner,uint8 status,string action,bytes32 operationId)[])",
   "function verifyProduct(uint256 productId) view returns (tuple(bool authentic,bool recalled,bool expired,bool blocked,uint8 status,address currentOwner,uint256 batchId,uint256 expirationDate))",
@@ -25,7 +29,9 @@ export const supplyChainAbi = [
   "event BatchCreated(uint256 indexed batchId,address indexed manufacturer,uint256 productionDate,uint256 expirationDate,bytes32 temperatureHash,bytes32 metadataHash)",
   "event BatchRecalled(uint256 indexed batchId,address indexed regulator,string reason)",
   "event BatchUnrecalled(uint256 indexed batchId,address indexed regulator,string reason)",
-  "event ProductCreated(uint256 indexed productId,uint256 indexed batchId,string serialNumber,string name,address indexed manufacturer)"
+  "event ProductCreated(uint256 indexed productId,uint256 indexed batchId,string serialNumber,string name,address indexed manufacturer)",
+  "event ProductBlocked(uint256 indexed productId,address indexed regulator,string reason,bytes32 operationId)",
+  "event ProductUnblocked(uint256 indexed productId,address indexed regulator,string reason,bytes32 operationId)"
 ];
 
 const contractAddress = import.meta.env.VITE_CONTRACT_ADDRESS;
@@ -154,6 +160,51 @@ export function temperatureHash(value: string) {
   return id(value.trim() || "temperature-not-provided");
 }
 
+/** keccak256 от байтов файла на клиенте. */
+export async function keccakOfFile(file: File): Promise<string> {
+  if (!file) throw new Error("Файл не выбран.");
+  if (file.size === 0) throw new Error("Файл пуст — хеш не имеет смысла.");
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error("Файл больше 10 МиБ. Сократите или сохраните отдельно и пришлите ссылку.");
+  }
+  const buffer = await file.arrayBuffer();
+  return keccak256(new Uint8Array(buffer));
+}
+
+void toUtf8Bytes;
+
+const ROLE_GETTER: Record<string, "ADMIN_ROLE" | "MANUFACTURER_ROLE" | "DISTRIBUTOR_ROLE" | "PHARMACY_ROLE" | "REGULATOR_ROLE"> = {
+  ADMIN:        "ADMIN_ROLE",
+  MANUFACTURER: "MANUFACTURER_ROLE",
+  DISTRIBUTOR:  "DISTRIBUTOR_ROLE",
+  PHARMACY:     "PHARMACY_ROLE",
+  REGULATOR:    "REGULATOR_ROLE"
+};
+
+export async function grantRoleByName(roleName: string, account: string) {
+  const key = ROLE_GETTER[roleName];
+  if (!key) throw new Error(`Неизвестная роль: ${roleName}`);
+  const validAccount = requireAddress(account, "Адрес кошелька");
+  await ensureExpectedChain();
+  const contract = await getSupplyChainContract(true);
+  const role = await (contract[key] as () => Promise<string>)();
+  const tx = await contract.grantRole(role, validAccount);
+  const receipt = await tx.wait();
+  return receipt.hash as string;
+}
+
+export async function revokeRoleByName(roleName: string, account: string) {
+  const key = ROLE_GETTER[roleName];
+  if (!key) throw new Error(`Неизвестная роль: ${roleName}`);
+  const validAccount = requireAddress(account, "Адрес кошелька");
+  await ensureExpectedChain();
+  const contract = await getSupplyChainContract(true);
+  const role = await (contract[key] as () => Promise<string>)();
+  const tx = await contract.revokeRole(role, validAccount);
+  const receipt = await tx.wait();
+  return receipt.hash as string;
+}
+
 export async function getWalletRoles(address: string) {
   const contract = await getSupplyChainContract(false);
   const roles = [
@@ -171,14 +222,22 @@ export async function getWalletRoles(address: string) {
   return checks.filter((role) => role.enabled).map((role) => role.label);
 }
 
-export async function createBatch(productionDate: number, expirationDate: number, temperatureLog: string, metadata: string) {
+export async function createBatch(
+  productionDate: number,
+  expirationDate: number,
+  temperatureLog: string,
+  metadata: string,
+  overrides?: { temperatureHashOverride?: string; metadataHashOverride?: string }
+) {
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
+  const tHash = overrides?.temperatureHashOverride ?? temperatureHash(temperatureLog);
+  const mHash = overrides?.metadataHashOverride    ?? metadataHash(metadata);
   const tx = await contract.createBatch(
     productionDate,
     expirationDate,
-    temperatureHash(temperatureLog),
-    metadataHash(metadata)
+    tHash,
+    mHash
   );
   const receipt = await tx.wait();
   const event = receipt.logs
@@ -263,6 +322,30 @@ export async function unrecallBatch(batchId: string, reason: string) {
   await ensureExpectedChain();
   const contract = await getSupplyChainContract(true);
   const tx = await contract.unrecallBatch(validBatchId, trimmed, operationId("unrecall"));
+  const receipt = await tx.wait();
+  return receipt.hash as string;
+}
+
+export async function blockProduct(productId: string, reason: string) {
+  const validProductId = requireUint(productId, "ID продукта");
+  const trimmed = String(reason ?? "").trim();
+  if (trimmed.length < 5) throw new Error("Причина блокировки должна быть не короче 5 символов.");
+  if (trimmed.length > 500) throw new Error("Причина не должна превышать 500 символов.");
+  await ensureExpectedChain();
+  const contract = await getSupplyChainContract(true);
+  const tx = await contract.blockProduct(validProductId, trimmed, operationId("block"));
+  const receipt = await tx.wait();
+  return receipt.hash as string;
+}
+
+export async function unblockProduct(productId: string, reason: string) {
+  const validProductId = requireUint(productId, "ID продукта");
+  const trimmed = String(reason ?? "").trim();
+  if (trimmed.length < 5) throw new Error("Причина разблокировки должна быть не короче 5 символов.");
+  if (trimmed.length > 500) throw new Error("Причина не должна превышать 500 символов.");
+  await ensureExpectedChain();
+  const contract = await getSupplyChainContract(true);
+  const tx = await contract.unblockProduct(validProductId, trimmed, operationId("unblock"));
   const receipt = await tx.wait();
   return receipt.hash as string;
 }

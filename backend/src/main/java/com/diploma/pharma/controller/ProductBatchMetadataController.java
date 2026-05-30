@@ -19,7 +19,7 @@ public class ProductBatchMetadataController {
     }
 
     @PostMapping
-    @PreAuthorize("hasRole('MANUFACTURER')")
+    @PreAuthorize("hasAnyRole('MANUFACTURER','ADMIN')")
     public ProductBatchMetadataResponse create(@Valid @RequestBody ProductBatchMetadataRequest request) {
         return service.create(request);
     }

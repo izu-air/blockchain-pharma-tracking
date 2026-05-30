@@ -19,7 +19,7 @@ public class ProductEventController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY','REGULATOR')")
+    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY','REGULATOR','ADMIN')")
     public ProductEventResponse create(@Valid @RequestBody ProductEventRequest request) {
         return service.create(request);
     }

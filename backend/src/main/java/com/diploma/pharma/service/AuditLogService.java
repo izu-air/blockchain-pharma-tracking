@@ -3,10 +3,15 @@ package com.diploma.pharma.service;
 import com.diploma.pharma.dto.AuditLogResponse;
 import com.diploma.pharma.entity.AuditLog;
 import com.diploma.pharma.repository.AuditLogRepository;
+import jakarta.persistence.criteria.Predicate;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -38,10 +43,41 @@ public class AuditLogService {
 
     @Transactional(readOnly = true)
     public Page<AuditLogResponse> list(int page, int size) {
+        return list(page, size, null, null, null, null);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<AuditLogResponse> list(
+            int page, int size,
+            String action, String walletQuery,
+            Instant from, Instant to
+    ) {
         int safePage = Math.max(page, 0);
         int safeSize = Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
-        Pageable pageable = PageRequest.of(safePage, safeSize, Sort.by(Sort.Direction.DESC, "createdAt"));
-        return repository.findAll(pageable).map(this::toResponse);
+        Pageable pageable = PageRequest.of(safePage, safeSize,
+                Sort.by(Sort.Direction.DESC, "createdAt"));
+
+        Specification<AuditLog> spec = (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            if (action != null && !action.isBlank()) {
+                predicates.add(cb.equal(root.get("action"), action.trim()));
+            }
+            if (walletQuery != null && !walletQuery.isBlank()) {
+                // Storage is pseudonymized — re-derive the same HMAC so the
+                // server-side pepper never leaves the JVM.
+                predicates.add(cb.equal(root.get("actor"),
+                        pseudonymizer.pseudonymize(walletQuery.trim())));
+            }
+            if (from != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("createdAt"), from));
+            }
+            if (to != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("createdAt"), to));
+            }
+            return predicates.isEmpty() ? cb.conjunction() : cb.and(predicates.toArray(Predicate[]::new));
+        };
+
+        return repository.findAll(spec, pageable).map(this::toResponse);
     }
 
     /** Backwards-compatible default. */

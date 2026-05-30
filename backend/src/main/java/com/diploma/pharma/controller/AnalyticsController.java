@@ -1,5 +1,6 @@
 package com.diploma.pharma.controller;
 
+import com.diploma.pharma.dto.AnalyticsDailyResponse;
 import com.diploma.pharma.dto.AnalyticsResponse;
 import com.diploma.pharma.service.AnalyticsService;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -24,5 +25,14 @@ public class AnalyticsController {
     @PreAuthorize("hasAnyRole('ADMIN','REGULATOR','MANUFACTURER','DISTRIBUTOR','PHARMACY')")
     public AnalyticsResponse summary() {
         return analyticsService.summary();
+    }
+
+    /** Подневные счётчики событий для линейного графика. */
+    @GetMapping("/daily")
+    @PreAuthorize("hasAnyRole('ADMIN','REGULATOR','MANUFACTURER','DISTRIBUTOR','PHARMACY')")
+    public AnalyticsDailyResponse daily(
+            @RequestParam(defaultValue = "30") int days
+    ) {
+        return analyticsService.daily(days);
     }
 }

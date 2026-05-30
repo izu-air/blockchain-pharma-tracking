@@ -1,23 +1,27 @@
 import { useMemo, useState } from "react";
-import { CheckCircle2, Hash } from "lucide-react";
+import { AlertTriangle, CheckCircle2, FileUp, Hash, Loader2, RefreshCw, X } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { saveBatchMetadata, saveMetadata, saveProductEvent } from "../lib/api";
-import { createBatch, createProduct, metadataHash, temperatureHash } from "../lib/contract";
+import {
+  createBatch, createProduct, keccakOfFile, metadataHash, temperatureHash
+} from "../lib/contract";
 import { humanizeError } from "../lib/errors";
 import { buildVerifyUrl } from "../lib/qr";
 import { toUnixDate } from "../lib/status";
 import { ResultMessage } from "../components/ResultMessage";
 
-/**
- * Two-step product registration:
- *   1) Create on-chain batch  -> contract returns a numeric `batchId` (uint256)
- *   2) Create product inside that batch with a user-defined serial number
- *
- * The component intentionally keeps `batchNumber` (free-form business label
- * such as "BATCH-2026-001") separate from `batchId` (numeric on-chain id).
- * `batchId` is filled automatically after step 1 and is read-only by default
- * — manual override is gated behind an explicit toggle and validated.
- */
+type SaveStatus =
+  | { kind: "idle" }
+  | { kind: "pending" }
+  | { kind: "success" }
+  | { kind: "error"; message: string };
+
+interface FileHash {
+  name: string;
+  size: number;
+  hash: string;
+}
+
 export default function RegisterProductPage() {
   // Step 1 — batch
   const [batchNumber, setBatchNumber] = useState("BATCH-2026-001");
@@ -33,11 +37,22 @@ export default function RegisterProductPage() {
   const [manualBatchId, setManualBatchId] = useState(false);
   const [productId, setProductId] = useState("");
 
-  // Status
+  // Status — on-chain
   const [batchTxHash, setBatchTxHash] = useState("");
   const [productTxHash, setProductTxHash] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Status — off-chain (separate so the user sees BOTH outcomes)
+  const [batchOffChain, setBatchOffChain] = useState<SaveStatus>({ kind: "idle" });
+  const [productOffChain, setProductOffChain] = useState<SaveStatus>({ kind: "idle" });
+
+  const [temperatureFile, setTemperatureFile] = useState<FileHash | null>(null);
+  const [certificateFile, setCertificateFile] = useState<FileHash | null>(null);
+
+  // Derived: the hashes that will actually be sent to the contract.
+  const effectiveTemperatureHash = temperatureFile?.hash ?? temperatureHash(temperatureLog);
+  const effectiveMetadataHash    = certificateFile?.hash ?? metadataHash(`${batchNumber}; ${description}`);
 
   // --- Client-side validation -----------------------------------------------
   const batchIdValid = /^\d+$/.test(batchId) && Number(batchId) > 0;
@@ -51,6 +66,50 @@ export default function RegisterProductPage() {
   const canCreateBatch  = !loading && batchNumberValid && datesValid && temperatureLog.trim().length > 0;
   const canCreateProduct = !loading && batchIdValid && serialValid && nameValid;
 
+  async function persistBatchOffChain(onChainBatchId: string) {
+    setBatchOffChain({ kind: "pending" });
+    try {
+      await saveBatchMetadata({
+        blockchainBatchId: Number(onChainBatchId),
+        batchNumber: batchNumber.trim(),
+        manufacturerName: "MetaMask manufacturer",
+        productionDate,
+        expirationDate,
+        metadataHash: effectiveMetadataHash,
+        temperatureHash: effectiveTemperatureHash
+      });
+      setBatchOffChain({ kind: "success" });
+    } catch (metaException) {
+      setBatchOffChain({
+        kind: "error",
+        message: humanizeError(metaException, "Backend не принял метаданные партии.")
+      });
+    }
+  }
+
+  async function persistProductOffChain(onChainProductId: string, txHash: string) {
+    setProductOffChain({ kind: "pending" });
+    try {
+      await saveMetadata({
+        blockchainProductId: Number(onChainProductId),
+        batchNumber: batchNumber.trim(),
+        expirationDate,
+        description: `${description} Serial: ${serialNumber.trim()}`
+      });
+      await saveProductEvent({
+        blockchainProductId: Number(onChainProductId),
+        eventType: "PRODUCT_CREATED",
+        transactionHash: txHash
+      });
+      setProductOffChain({ kind: "success" });
+    } catch (metaException) {
+      setProductOffChain({
+        kind: "error",
+        message: humanizeError(metaException, "Backend не принял метаданные продукта.")
+      });
+    }
+  }
+
   async function handleCreateBatch() {
     setError("");
     if (!batchNumberValid) {
@@ -63,32 +122,21 @@ export default function RegisterProductPage() {
     }
     setLoading(true);
     setBatchTxHash("");
+    setBatchOffChain({ kind: "idle" });
 
     try {
       const result = await createBatch(
         toUnixDate(productionDate),
         toUnixDate(expirationDate),
-        temperatureLog,
-        `${batchNumber}; ${description}`
+        temperatureFile ? `__filehash__:${effectiveTemperatureHash}` : temperatureLog,
+        certificateFile ? `__filehash__:${effectiveMetadataHash}`    : `${batchNumber}; ${description}`,
+        { temperatureHashOverride: temperatureFile?.hash, metadataHashOverride: certificateFile?.hash }
       );
       setBatchId(result.batchId);
       setBatchTxHash(result.txHash);
-      // Off-chain metadata best-effort.  Failure here doesn't undo the on-chain batch.
       if (result.batchId) {
-        try {
-          await saveBatchMetadata({
-            blockchainBatchId: Number(result.batchId),
-            batchNumber: batchNumber.trim(),
-            manufacturerName: "MetaMask manufacturer",
-            productionDate,
-            expirationDate,
-            metadataHash: metadataHash(`${batchNumber}; ${description}`),
-            temperatureHash: temperatureHash(temperatureLog)
-          });
-        } catch (metaException) {
-          // Surface but don't block the main flow.
-          console.warn("saveBatchMetadata failed:", metaException);
-        }
+        // Best-effort, but status is now SURFACED to the user.
+        void persistBatchOffChain(result.batchId);
       }
     } catch (exception) {
       setError(humanizeError(exception, "Не удалось создать партию."));
@@ -115,6 +163,7 @@ export default function RegisterProductPage() {
     setLoading(true);
     setProductTxHash("");
     setProductId("");
+    setProductOffChain({ kind: "idle" });
 
     try {
       const result = await createProduct(batchId, name.trim(), serialNumber.trim());
@@ -122,21 +171,7 @@ export default function RegisterProductPage() {
       setProductId(result.productId);
 
       if (result.productId) {
-        try {
-          await saveMetadata({
-            blockchainProductId: Number(result.productId),
-            batchNumber: batchNumber.trim(),
-            expirationDate,
-            description: `${description} Serial: ${serialNumber.trim()}`
-          });
-          await saveProductEvent({
-            blockchainProductId: Number(result.productId),
-            eventType: "PRODUCT_CREATED",
-            transactionHash: result.txHash
-          });
-        } catch (metaException) {
-          console.warn("post-create off-chain save failed:", metaException);
-        }
+        void persistProductOffChain(result.productId, result.txHash);
       }
     } catch (exception) {
       setError(humanizeError(exception, "Не удалось зарегистрировать продукт."));
@@ -179,10 +214,17 @@ export default function RegisterProductPage() {
           type="date"
         />
         <Field
-          label="Температурный журнал"
+          label="Температурный журнал (текст)"
           value={temperatureLog}
           onChange={setTemperatureLog}
-          help="Хешируется и сохраняется on-chain. Сам журнал хранится off-chain."
+          help="Хешируется через ethers.id(...) и сохраняется on-chain. Сам журнал хранится off-chain."
+        />
+        <FileHashField
+          label="… или загрузите файл температурного журнала"
+          file={temperatureFile}
+          onChange={setTemperatureFile}
+          accept=".csv,.txt,.pdf,.json,.log"
+          helpWhenEmpty="Если файл задан, он перебивает текстовое поле сверху и keccak256 будет считаться от его байтов."
         />
         <label className="block">
           <span className="mb-1 block text-sm font-medium">Описание</span>
@@ -193,6 +235,19 @@ export default function RegisterProductPage() {
             maxLength={1000}
           />
         </label>
+        <FileHashField
+          label="Сертификат соответствия (файл) — перекроет метаданные"
+          file={certificateFile}
+          onChange={setCertificateFile}
+          accept=".pdf,.p7s,.sig,.zip,.xml"
+          helpWhenEmpty="Если приложить файл, on-chain metadataHash будет считаться от его байтов."
+        />
+
+        <HashSummary
+          temperatureHash={effectiveTemperatureHash}
+          metadataHash={effectiveMetadataHash}
+          fromFile={Boolean(temperatureFile || certificateFile)}
+        />
         <button
           type="button"
           className="button-secondary"
@@ -206,7 +261,7 @@ export default function RegisterProductPage() {
           <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-2 text-sm">
             <CheckCircle2 className="shrink-0 text-emerald-400" size={18} />
             <span className="text-slate-200">
-              Партия создана. On-chain ID:{" "}
+              Партия создана on-chain. ID:{" "}
               <span className="font-mono font-semibold text-emerald-300">{batchId}</span>
             </span>
           </div>
@@ -215,6 +270,13 @@ export default function RegisterProductPage() {
           <div className="mt-2">
             <ResultMessage txHash={batchTxHash} />
           </div>
+        )}
+        {batchId && (
+          <OffChainStatusPanel
+            status={batchOffChain}
+            label="Сохранение метаданных партии в backend"
+            onRetry={() => void persistBatchOffChain(batchId)}
+          />
         )}
       </div>
 
@@ -293,6 +355,14 @@ export default function RegisterProductPage() {
         <button className="button" type="submit" disabled={!canCreateProduct}>
           {loading ? "Отправка…" : "Создать продукт"}
         </button>
+
+        {productId && (
+          <OffChainStatusPanel
+            status={productOffChain}
+            label="Сохранение метаданных продукта в backend"
+            onRetry={() => void persistProductOffChain(productId, productTxHash)}
+          />
+        )}
       </form>
 
       {productId && (
@@ -306,12 +376,48 @@ export default function RegisterProductPage() {
   );
 }
 
-/**
- * Render блок с QR + копируемый URL.  URL вычисляется один раз через useMemo,
- * чтобы nonce/timestamp оставались стабильными в рамках одной регистрации
- * (иначе QR обновлялся бы при каждом ре-рендере, и его нельзя было бы
- * распечатать).
- */
+function OffChainStatusPanel({
+  status, label, onRetry
+}: {
+  status: SaveStatus;
+  label: string;
+  onRetry: () => void;
+}) {
+  if (status.kind === "idle") return null;
+  if (status.kind === "pending") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-sky-500/30 bg-sky-950/30 p-2 text-sm text-sky-200">
+        <Loader2 className="animate-spin" size={16} /> {label}…
+      </div>
+    );
+  }
+  if (status.kind === "success") {
+    return (
+      <div className="flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-950/30 p-2 text-sm text-emerald-200">
+        <CheckCircle2 size={16} /> {label}: успешно.
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-sm">
+      <div className="flex items-start gap-2 text-amber-200">
+        <AlertTriangle size={16} className="mt-0.5 shrink-0" />
+        <div className="min-w-0">
+          <p className="font-semibold">On-chain транзакция прошла, но backend не сохранил метаданные.</p>
+          <p className="mt-1 break-words text-amber-100/90">{status.message}</p>
+          <p className="mt-1 text-xs text-amber-300/80">
+            Продукт уже существует в смарт-контракте, но в кабинетах он может не появиться,
+            пока индексатор не догонит событие или вы не нажмёте «Повторить сохранение».
+          </p>
+        </div>
+      </div>
+      <button type="button" className="button-secondary inline-flex items-center gap-2" onClick={onRetry}>
+        <RefreshCw size={14} /> Повторить сохранение метаданных
+      </button>
+    </div>
+  );
+}
+
 function ProductQrPanel({ productId, serialNumber }: { productId: string; serialNumber: string }) {
   const qrUrl = useMemo(
     () => buildVerifyUrl(undefined, serialNumber),
@@ -349,6 +455,123 @@ function ProductQrPanel({ productId, serialNumber }: { productId: string; serial
   );
 }
 
+function FileHashField({
+  label, file, onChange, accept, helpWhenEmpty
+}: {
+  label: string;
+  file: FileHash | null;
+  onChange: (file: FileHash | null) => void;
+  accept?: string;
+  helpWhenEmpty?: string;
+}) {
+  const [hashing, setHashing] = useState(false);
+  const [hashError, setHashError] = useState("");
+
+  async function handlePick(event: React.ChangeEvent<HTMLInputElement>) {
+    setHashError("");
+    const f = event.target.files?.[0];
+    if (!f) {
+      onChange(null);
+      return;
+    }
+    setHashing(true);
+    try {
+      const hash = await keccakOfFile(f);
+      onChange({ name: f.name, size: f.size, hash });
+    } catch (exception) {
+      onChange(null);
+      setHashError((exception as Error).message ?? "Не удалось хешировать файл.");
+    } finally {
+      setHashing(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded-lg border border-white/10 bg-slate-950/30 p-3">
+      <div className="flex items-center gap-2 text-sm font-medium">
+        <FileUp size={14} className="text-slate-400" />
+        {label}
+      </div>
+      <input
+        type="file"
+        accept={accept}
+        onChange={handlePick}
+        className="block w-full text-sm text-slate-300
+                   file:mr-3 file:rounded-md file:border-0 file:bg-emerald-600
+                   file:px-3 file:py-1 file:text-sm file:font-semibold file:text-white
+                   hover:file:bg-emerald-500"
+      />
+      {hashing && (
+        <div className="inline-flex items-center gap-2 text-xs text-slate-400">
+          <Loader2 className="animate-spin" size={12} /> Считаем keccak256…
+        </div>
+      )}
+      {hashError && (
+        <div className="text-xs text-red-400">{hashError}</div>
+      )}
+      {file && (
+        <div className="space-y-1 rounded-md border border-emerald-500/30 bg-emerald-950/30 p-2 text-xs">
+          <div className="flex items-center justify-between gap-2 text-emerald-200">
+            <span className="min-w-0 truncate">
+              {file.name} <span className="text-emerald-400/80">({(file.size / 1024).toFixed(1)} КиБ)</span>
+            </span>
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded border border-white/20 px-2 py-0.5 text-slate-300 hover:bg-white/5"
+              onClick={() => onChange(null)}
+            >
+              <X size={10} /> убрать
+            </button>
+          </div>
+          <div className="break-all font-mono text-[11px] text-emerald-100">
+            {file.hash}
+          </div>
+        </div>
+      )}
+      {!file && helpWhenEmpty && (
+        <div className="text-xs text-slate-500">{helpWhenEmpty}</div>
+      )}
+    </div>
+  );
+}
+
+function HashSummary({
+  temperatureHash, metadataHash, fromFile
+}: {
+  temperatureHash: string;
+  metadataHash: string;
+  fromFile: boolean;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3 text-xs">
+      <div className="mb-2 flex items-center gap-2 text-sm font-medium text-slate-200">
+        <Hash size={14} className="text-slate-400" />
+        Хеши, которые попадут в on-chain транзакцию
+        {fromFile && (
+          <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-300">
+            из файла
+          </span>
+        )}
+      </div>
+      <div className="space-y-2">
+        <div>
+          <div className="text-slate-400">temperatureHash</div>
+          <div className="break-all font-mono text-[11px] text-slate-200">{temperatureHash}</div>
+        </div>
+        <div>
+          <div className="text-slate-400">metadataHash</div>
+          <div className="break-all font-mono text-[11px] text-slate-200">{metadataHash}</div>
+        </div>
+      </div>
+      <p className="mt-2 leading-snug text-slate-500">
+        Контракт сохраняет только эти 32-байтовые значения. Сами файлы / тексты
+        остаются у вас — потребитель сможет сверить хеш позже, скачав документ
+        по тому же серийному номеру.
+      </p>
+    </div>
+  );
+}
+
 function Field({
   label, value, onChange, type = "text", help, maxLength
 }: {
@@ -375,3 +598,4 @@ function Field({
     </label>
   );
 }
+

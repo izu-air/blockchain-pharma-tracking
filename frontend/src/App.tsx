@@ -5,7 +5,9 @@ import { ProtectedRoute } from "./components/ProtectedRoute";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { WalletProvider } from "./context/WalletContext";
 import DashboardPage from "./pages/DashboardPage";
+import AdminPage from "./pages/AdminPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
+import AuditLogPage from "./pages/AuditLogPage";
 import DistributorDashboardPage from "./pages/DistributorDashboardPage";
 import HistoryPage from "./pages/HistoryPage";
 import LoginPage from "./pages/LoginPage";
@@ -116,6 +118,24 @@ function Shell() {
               allowedBackendRoles={["MANUFACTURER", "DISTRIBUTOR", "PHARMACY", "REGULATOR", "ADMIN"]}
             >
               <AnalyticsPage />
+            </ProtectedRoute>
+          } />
+
+          {/* ── Admin / Audit ── */}
+          <Route path="/admin" element={
+            <ProtectedRoute
+              allowedBackendRoles={["ADMIN"]}
+              allowedWalletRoles={["ADMIN"]}
+            >
+              <AdminPage />
+            </ProtectedRoute>
+          } />
+          <Route path="/audit" element={
+            <ProtectedRoute
+              allowedBackendRoles={["ADMIN", "REGULATOR"]}
+              allowedWalletRoles={["ADMIN", "REGULATOR"]}
+            >
+              <AuditLogPage />
             </ProtectedRoute>
           } />
 

@@ -63,3 +63,15 @@ export interface AnalyticsSummary {
   statusEvents: number;
   recallEvents: number;
 }
+
+export interface AnalyticsDaily {
+  window: number;
+  buckets: Array<{
+    date: string;       // ISO calendar date, e.g. "2026-05-25"
+    total: number;
+    created: number;
+    transferred: number;
+    status: number;
+    recalled: number;
+  }>;
+}

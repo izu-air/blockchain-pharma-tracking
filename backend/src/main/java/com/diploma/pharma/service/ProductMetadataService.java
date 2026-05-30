@@ -3,7 +3,6 @@ package com.diploma.pharma.service;
 import com.diploma.pharma.dto.ProductMetadataRequest;
 import com.diploma.pharma.dto.ProductMetadataResponse;
 import com.diploma.pharma.entity.ProductMetadata;
-import com.diploma.pharma.exception.DuplicateResourceException;
 import com.diploma.pharma.exception.ResourceNotFoundException;
 import com.diploma.pharma.repository.ProductMetadataRepository;
 import java.util.List;
@@ -20,19 +19,24 @@ public class ProductMetadataService {
         this.auditLogService = auditLogService;
     }
 
+    /** UPSERT по blockchainProductId. */
     @Transactional
     public ProductMetadataResponse create(ProductMetadataRequest request) {
-        if (repository.existsByBlockchainProductId(request.blockchainProductId())) {
-            throw new DuplicateResourceException("Metadata for this blockchain product already exists");
-        }
-
-        ProductMetadata metadata = new ProductMetadata();
-        metadata.setBlockchainProductId(request.blockchainProductId());
+        ProductMetadata metadata = repository.findByBlockchainProductId(request.blockchainProductId())
+                .orElseGet(() -> {
+                    ProductMetadata fresh = new ProductMetadata();
+                    fresh.setBlockchainProductId(request.blockchainProductId());
+                    return fresh;
+                });
+        boolean isNew = metadata.getId() == null;
         metadata.setBatchNumber(request.batchNumber());
         metadata.setExpirationDate(request.expirationDate());
         metadata.setDescription(request.description());
         ProductMetadata saved = repository.save(metadata);
-        auditLogService.record("system", "PRODUCT_METADATA_CREATED", "PRODUCT", request.blockchainProductId().toString(), request.batchNumber());
+        auditLogService.record("system",
+                isNew ? "PRODUCT_METADATA_CREATED" : "PRODUCT_METADATA_UPDATED",
+                "PRODUCT", request.blockchainProductId().toString(),
+                request.batchNumber());
         return toResponse(saved);
     }
 

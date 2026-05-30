@@ -48,6 +48,18 @@ public class IndexerController {
         return new BackfillResponse(fromBlock, toBlock, saved);
     }
 
+    /** Сбрасывает чекпойнт индексатора на blockchain.indexer.start-block - 1
+     *  (или на явный {@code to}).  Нужен после рестарта локальной ноды. */
+    @PostMapping("/reset")
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResetResponse reset(
+            @RequestParam(value = "to", required = false) Long toBlock
+    ) {
+        long checkpoint = indexer.reset(toBlock);
+        return new ResetResponse(checkpoint);
+    }
+
     public record RunResponse(long lastProcessedBlock) { }
     public record BackfillResponse(long fromBlock, long toBlock, int eventsPersisted) { }
+    public record ResetResponse(long lastProcessedBlock) { }
 }

@@ -85,6 +85,29 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
+    @Transactional
+    public UserResponse updateRole(Long id, UserRole newRole, String reason) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        UserRole previous = user.getRole();
+        user.setRole(newRole);
+        UserResponse response = toResponse(userRepository.save(user));
+        auditLogService.record(user.getWalletAddress(), "USER_ROLE_UPDATED", "USER",
+                response.id().toString(),
+                "from=" + previous + ", to=" + newRole
+                        + (reason != null && !reason.isBlank() ? "; reason=" + reason : ""));
+        return response;
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        User user = userRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("User not found"));
+        userRepository.delete(user);
+        auditLogService.record(user.getWalletAddress(), "USER_DELETED", "USER",
+                id.toString(), "role=" + user.getRole());
+    }
+
     private static boolean currentAuthorityIs(String authority) {
         Authentication auth = SecurityContextHolder.getContext().getAuthentication();
         if (auth == null || !auth.isAuthenticated()) return false;

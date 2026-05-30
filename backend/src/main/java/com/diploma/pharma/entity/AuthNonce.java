@@ -27,8 +27,11 @@ public class AuthNonce {
     @Column(name = "nonce_hash", nullable = false, unique = true, length = 128)
     private String nonceHash;
 
-    @Lob
-    @Column(name = "message", nullable = false)
+    // V3 migration creates `message TEXT`.  Using @Lob makes Hibernate
+    // pick the `oid` (large-object) SQL type on PostgreSQL, which mismatches
+    // the actual column and breaks schema validation on startup.  A bare
+    // String mapping with no length cap maps to TEXT and matches the column.
+    @Column(name = "message", nullable = false, columnDefinition = "text")
     private String message;
 
     @Column(name = "expires_at", nullable = false)

@@ -19,7 +19,7 @@ public class ProductMetadataController {
     }
 
     @PostMapping
-    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY')")
+    @PreAuthorize("hasAnyRole('MANUFACTURER','DISTRIBUTOR','PHARMACY','ADMIN')")
     public ProductMetadataResponse create(@Valid @RequestBody ProductMetadataRequest request) {
         return service.create(request);
     }
