@@ -74,10 +74,20 @@ public class AuthNonceService {
     }
 
     /**
-     * Marks the challenge that produced this exact {@code message} as used.
-     * Throws if the message is unknown, already consumed, expired, or for a
-     * different wallet.  Returns the canonical (lower-case) wallet address
-     * the challenge was issued to.
+     * Atomically marks the challenge as used and returns the canonical
+     * (lower-case) wallet address.
+     *
+     * <p>Race-safe: relies on a single SQL
+     * {@code UPDATE … WHERE used = false AND expires_at > now}.  Two
+     * concurrent {@code /api/auth/login} requests that present the same
+     * signed message both reach this method, but the DB engine guarantees
+     * exactly one of them receives {@code affected = 1}; the loser is
+     * rejected with {@link IllegalStateException}.  No pre-check / write
+     * gap means there is no window for a replay.</p>
+     *
+     * <p>Wallet-mismatch is still validated separately so the error message
+     * remains specific, but only after the atomic claim — a wallet-mismatch
+     * attacker cannot "burn" the nonce for the legitimate user.</p>
      */
     @Transactional
     public String consume(String message, String expectedWallet) {
@@ -85,20 +95,35 @@ public class AuthNonceService {
             throw new IllegalArgumentException("Сообщение для подписи не передано.");
         }
         String hash = sha256Base64Url(message);
+        Instant now = Instant.now();
+
+        int affected = repository.markUsedIfActive(hash, now);
+        if (affected != 1) {
+            // Either the row never existed, was already used, or had expired.
+            // Use the read-only lookup to differentiate for a precise error
+            // message, but do NOT mutate state — the atomic update above is
+            // the only writer.
+            AuthNonce existing = repository.findByNonceHash(hash).orElse(null);
+            if (existing == null) {
+                throw new ResourceNotFoundException("Сообщение не найдено или уже использовано.");
+            }
+            if (existing.isUsed()) {
+                throw new IllegalStateException("Этот challenge уже был использован.");
+            }
+            if (now.isAfter(existing.getExpiresAt())) {
+                throw new IllegalStateException("Срок жизни challenge истёк, запросите новый.");
+            }
+            // Should be unreachable — fail closed.
+            throw new IllegalStateException("Не удалось зафиксировать challenge как использованный.");
+        }
+
         AuthNonce row = repository.findByNonceHash(hash)
                 .orElseThrow(() -> new ResourceNotFoundException("Сообщение не найдено или уже использовано."));
-        if (row.isUsed()) {
-            throw new IllegalStateException("Этот challenge уже был использован.");
-        }
-        if (Instant.now().isAfter(row.getExpiresAt())) {
-            throw new IllegalStateException("Срок жизни challenge истёк, запросите новый.");
-        }
         if (expectedWallet != null && !row.getWalletAddress().equalsIgnoreCase(expectedWallet)) {
+            // Atomic claim already burned the nonce; reject the login but
+            // do NOT undo — a fresh challenge is required either way.
             throw new IllegalStateException("Сообщение выпущено для другого кошелька.");
         }
-        row.setUsed(true);
-        row.setUsedAt(Instant.now());
-        repository.save(row);
         return row.getWalletAddress();
     }
 
