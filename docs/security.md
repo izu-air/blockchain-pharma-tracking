@@ -24,6 +24,30 @@ Each product has a unique `serialNumber`. A counterfeit product cannot create a 
 
 When a regulator recalls a batch, unsold products are marked as blocked. Pharmacies cannot sell blocked or recalled products.
 
+## Access matrix
+
+| Operation | MANUFACTURER | DISTRIBUTOR | PHARMACY | REGULATOR | ADMIN |
+|---|---|---|---|---|---|
+| `createBatch` / `createProduct` | ✓ | — | — | — | ✓ |
+| `transferProduct` / `updateStatus` → InTransit/Delivered | when owner | when owner | when owner | — | — |
+| `updateStatus` → Sold | — | — | when owner | — | — |
+| `recallBatch` / `unrecallBatch` | — | — | — | ✓ | ✓ |
+| `blockProduct` / `unblockProduct` | — | — | — | ✓ | ✓ |
+| `grantRole` / `revokeRole` | — | — | — | — | ✓ |
+| `getProduct`, `verifyProduct` | public | public | public | public | public |
+
+Регулятор может отозвать любую партию любого производителя — это
+сознательное решение, как в реальном фарм-надзоре. Если потребуется
+разграничение «свой регулятор → свой производитель», нужно будет
+добавить в контракт mapping `batchRegulator` и проверку в `recallBatch`.
+
+## Role mismatch UX
+
+Страницы `/recall` и `/admin` сами проверяют on-chain роль кошелька
+через `useWallet().roles` до показа формы. Если у MetaMask-аккаунта нет
+нужной роли — выводится красный коллаут с указанием, какую роль
+запросить у администратора, и кнопки формы дизейблятся.
+
 ## Backend Security
 
 ### Wallet-signature login (SIWE-like)

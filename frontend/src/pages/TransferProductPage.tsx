@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { AlertTriangle, Loader2 } from "lucide-react";
 import { saveProductEvent } from "../lib/api";
-import { getProduct, isValidAddress, transferProduct, updateStatus } from "../lib/contract";
+import {
+  getProduct, getProductIdBySerial, isValidAddress, transferProduct, updateStatus
+} from "../lib/contract";
+import { useWallet } from "../context/WalletContext";
 import { humanizeError } from "../lib/errors";
 import {
   isPositiveIntegerString, STATUS_LABELS_RU, validateStatusTransition
@@ -11,18 +14,13 @@ import type { ExtendedProductStatus } from "../types/product";
 
 const FORWARD_STATUSES: ExtendedProductStatus[] = [1, 2, 3];
 
-/**
- * Two operations on one page because both target a numeric on-chain
- * product ID:
- *   * transferProduct — move ownership
- *   * updateStatus    — monotonic status machine
- *
- * For the status form we preload the product from the chain so we can
- * disable the current status option and any invalid forward transition —
- * the user never gets to send a tx that we already know will revert.
- */
 export default function TransferProductPage() {
-  const [blockchainProductId, setBlockchainProductId] = useState("1");
+  const wallet = useWallet();
+  const [productInput, setProductInput] = useState("1");
+  const [resolvedProductId, setResolvedProductId] = useState("");
+  const [resolveError, setResolveError] = useState("");
+  const [resolving, setResolving] = useState(false);
+
   const [newOwner, setNewOwner] = useState("");
   const [status, setStatus] = useState<ExtendedProductStatus>(2);
   const [txHash, setTxHash] = useState("");
@@ -31,41 +29,93 @@ export default function TransferProductPage() {
 
   // Live snapshot of the product, used to drive the status form UX
   const [currentStatus, setCurrentStatus] = useState<ExtendedProductStatus | null>(null);
+  const [currentOwner, setCurrentOwner] = useState<string>("");
   const [loadingProduct, setLoadingProduct] = useState(false);
   const [productError, setProductError] = useState("");
 
-  const productIdValid = isPositiveIntegerString(blockchainProductId);
+  const productIdValid = isPositiveIntegerString(resolvedProductId);
   const newOwnerValid = isValidAddress(newOwner);
   const transition = currentStatus != null
       ? validateStatusTransition(currentStatus, status)
       : { ok: true } as const;
 
+  const ownerMismatch = Boolean(
+    currentOwner && wallet.address &&
+    currentOwner.toLowerCase() !== wallet.address.toLowerCase()
+  );
+
+  const resolveProductId = useCallback(async () => {
+    const raw = productInput.trim();
+    setResolveError("");
+    if (!raw) {
+      setResolvedProductId("");
+      return;
+    }
+    if (/^\d+$/.test(raw)) {
+      setResolvedProductId(raw);
+      return;
+    }
+    setResolving(true);
+    try {
+      const id = await getProductIdBySerial(raw);
+      const idStr = id.toString();
+      if (!/^\d+$/.test(idStr) || idStr === "0") {
+        setResolvedProductId("");
+        setResolveError("Серийный номер не найден в смарт-контракте.");
+        return;
+      }
+      setResolvedProductId(idStr);
+    } catch (exception) {
+      setResolvedProductId("");
+      setResolveError(humanizeError(exception,
+        "Не удалось найти продукт по серийному номеру."));
+    } finally {
+      setResolving(false);
+    }
+  }, [productInput]);
+
+  useEffect(() => {
+    const handle = setTimeout(() => { void resolveProductId(); }, 300);
+    return () => clearTimeout(handle);
+  }, [resolveProductId]);
+
   const loadCurrentProduct = useCallback(async () => {
-    if (!isPositiveIntegerString(blockchainProductId)) {
+    if (!isPositiveIntegerString(resolvedProductId)) {
       setCurrentStatus(null);
+      setCurrentOwner("");
       setProductError("");
       return;
     }
     setLoadingProduct(true);
     setProductError("");
     try {
-      const product = await getProduct(blockchainProductId);
+      const product = await getProduct(resolvedProductId);
       setCurrentStatus(Number(product.status) as ExtendedProductStatus);
+      setCurrentOwner(String(product.currentOwner ?? ""));
     } catch (exception) {
       setCurrentStatus(null);
+      setCurrentOwner("");
       setProductError(humanizeError(exception, "Не удалось загрузить продукт."));
     } finally {
       setLoadingProduct(false);
     }
-  }, [blockchainProductId]);
+  }, [resolvedProductId]);
 
   useEffect(() => { void loadCurrentProduct(); }, [loadCurrentProduct]);
 
   async function run(action: "transfer" | "status") {
     if (!productIdValid) {
       setError(
-        "Blockchain product ID должен быть положительным числом. " +
-        "Серийный номер (SN-…) вводите на странице «Проверка», не здесь."
+        "ID продукта не распознан. Введите числовой on-chain ID (1, 2, 3…) " +
+        "или серийный номер вида SN-… — мы автоматически найдём его в контракте."
+      );
+      return;
+    }
+    if (ownerMismatch) {
+      setError(
+        `Текущий владелец продукта — ${currentOwner}. ` +
+        `Сначала получите его передачей от этого адреса. ` +
+        `Подключённый кошелёк: ${wallet.address || "не подключён"}.`
       );
       return;
     }
@@ -90,12 +140,12 @@ export default function TransferProductPage() {
 
     try {
       const hash = action === "transfer"
-        ? await transferProduct(blockchainProductId, newOwner.trim())
-        : await updateStatus(blockchainProductId, status);
+        ? await transferProduct(resolvedProductId, newOwner.trim())
+        : await updateStatus(resolvedProductId, status);
 
       setTxHash(hash);
       await saveProductEvent({
-        blockchainProductId: Number(blockchainProductId),
+        blockchainProductId: Number(resolvedProductId),
         eventType: action === "transfer" ? "PRODUCT_TRANSFERRED" : "STATUS_UPDATED",
         transactionHash: hash
       }).catch(() => undefined);
@@ -124,17 +174,17 @@ export default function TransferProductPage() {
         <h2 className="text-xl font-semibold">Передача продукта</h2>
         <p className="mt-1 text-sm text-slate-400">
           Передаёт владение существующим продуктом другому участнику цепочки.
-          ID продукта — числовой on-chain идентификатор, выданный смарт-контрактом
-          при <code>createProduct</code>.
+          В поле ниже можно ввести либо числовой on-chain ID,{" "}
+          либо серийный номер с QR-кода (вида SN-…) — он будет автоматически
+          разрешён в числовой ID.
         </p>
         <div className="mt-5 space-y-4">
-          <Field
-            label="Blockchain product ID (число)"
-            help="Числовой ID, например 1, 2, 17. Не путать с серийным номером SN-… (это строка на упаковке)."
-            value={blockchainProductId}
-            onChange={setBlockchainProductId}
-            inputMode="numeric"
-            pattern="\d+"
+          <ProductIdField
+            value={productInput}
+            onChange={setProductInput}
+            resolving={resolving}
+            resolved={resolvedProductId}
+            error={resolveError}
           />
           <Field
             label="Адрес нового владельца"
@@ -153,7 +203,7 @@ export default function TransferProductPage() {
           <button
             type="button"
             className="button"
-            disabled={loading || !productIdValid || !newOwnerValid}
+            disabled={loading || !productIdValid || !newOwnerValid || ownerMismatch}
             onClick={() => run("transfer")}
           >
             Передать владельцу
@@ -168,13 +218,13 @@ export default function TransferProductPage() {
           последовательность: Произведён → В пути → Доставлен → Продан.
         </p>
         <div className="mt-5 space-y-4">
-          <Field
-            label="Blockchain product ID (число)"
-            help="Тот же числовой ID, что и в форме передачи."
-            value={blockchainProductId}
-            onChange={setBlockchainProductId}
-            inputMode="numeric"
-            pattern="\d+"
+          <ProductIdField
+            value={productInput}
+            onChange={setProductInput}
+            resolving={resolving}
+            resolved={resolvedProductId}
+            error={resolveError}
+            help="Тот же ID, что и в форме передачи."
           />
           <div className="rounded-lg border border-white/10 bg-slate-950/50 p-3 text-sm text-slate-300">
             {loadingProduct ? (
@@ -182,18 +232,44 @@ export default function TransferProductPage() {
                 <Loader2 className="animate-spin" size={14} /> Загрузка статуса…
               </span>
             ) : currentStatus != null ? (
-              <span>
-                Текущий статус:{" "}
-                <span className="font-semibold text-emerald-300">
-                  {STATUS_LABELS_RU[currentStatus]}
-                </span>
-              </span>
+              <div className="space-y-2">
+                <div>
+                  Текущий статус:{" "}
+                  <span className="font-semibold text-emerald-300">
+                    {STATUS_LABELS_RU[currentStatus]}
+                  </span>
+                </div>
+                {currentOwner && (
+                  <div className="text-xs text-slate-400">
+                    Текущий владелец: <span className="break-all font-mono">{currentOwner}</span>
+                  </div>
+                )}
+              </div>
             ) : productError ? (
               <span className="text-amber-300">{productError}</span>
             ) : (
               <span className="text-slate-500">Введите ID, чтобы увидеть текущий статус.</span>
             )}
           </div>
+
+          {ownerMismatch && (
+            <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-950/30 p-3 text-sm text-amber-100">
+              <AlertTriangle size={18} className="mt-0.5 shrink-0 text-amber-300" />
+              <div className="min-w-0">
+                <p className="font-semibold">Вы не текущий владелец этого продукта.</p>
+                <p className="mt-1 break-words">
+                  Контракт примет передачу/смену статуса только от владельца{" "}
+                  <span className="break-all font-mono">{currentOwner}</span>.
+                </p>
+                <p className="mt-1 text-xs text-amber-200/80">
+                  Подключённый кошелёк MetaMask: <span className="break-all font-mono">
+                  {wallet.address || "не подключён"}</span>. Сначала получите продукт
+                  передачей от текущего владельца — либо переключитесь на его аккаунт.
+                </p>
+              </div>
+            </div>
+          )}
+
           <label className="block">
             <span className="mb-1 block text-sm font-medium">Новый статус</span>
             <select
@@ -223,7 +299,7 @@ export default function TransferProductPage() {
             type="button"
             className="button"
             disabled={
-              loading || !productIdValid || currentStatus == null || !transition.ok
+              loading || !productIdValid || currentStatus == null || !transition.ok || ownerMismatch
             }
             onClick={() => run("status")}
           >
@@ -236,6 +312,54 @@ export default function TransferProductPage() {
         <ResultMessage error={error} txHash={txHash} />
       </div>
     </div>
+  );
+}
+
+function ProductIdField({
+  value, onChange, resolving, resolved, error, help
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  resolving: boolean;
+  resolved: string;
+  error: string;
+  help?: string;
+}) {
+  const isSerial = value.trim() !== "" && !/^\d+$/.test(value.trim());
+  return (
+    <label className="block">
+      <span className="mb-1 block text-sm font-medium">
+        ID продукта (число) или серийный номер
+      </span>
+      <input
+        className="input font-mono"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder="1, 2, 17… либо SN-DEMO-001"
+        autoComplete="off"
+        spellCheck={false}
+        required
+      />
+      <div className="mt-1 text-xs text-slate-500">
+        {help ?? "Принимаем оба формата: числовой ID контракта и серийный номер с QR."}
+      </div>
+      {isSerial && (
+        <div className="mt-1 text-xs">
+          {resolving ? (
+            <span className="inline-flex items-center gap-1 text-slate-400">
+              <Loader2 className="animate-spin" size={12} />
+              Поиск по серийному номеру…
+            </span>
+          ) : resolved ? (
+            <span className="text-emerald-300">
+              Найден on-chain ID: <span className="font-mono">{resolved}</span>
+            </span>
+          ) : error ? (
+            <span className="text-red-400">{error}</span>
+          ) : null}
+        </div>
+      )}
+    </label>
   );
 }
 

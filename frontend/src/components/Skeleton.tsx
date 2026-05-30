@@ -1,15 +1,14 @@
 /**
- * Lightweight skeleton placeholders.  No animation libraries — uses Tailwind's
- * `animate-pulse` + slate background to keep bundle size minimal.
+ * Lightweight skeleton placeholders using the global `.skeleton` shimmer
+ * defined in styles.css.  Avoid heavy animation libraries — keeps bundle
+ * minimal.
  */
 export function SkeletonBlock({ className = "" }: { className?: string }) {
-  return (
-    <div
-      aria-hidden="true"
-      className={`animate-pulse rounded bg-slate-700/50 ${className}`}
-    />
-  );
+  return <div aria-hidden="true" className={`skeleton rounded ${className}`} />;
 }
+
+/** Alias kept for readability where the call-site doesn't care about variants. */
+export const Skeleton = SkeletonBlock;
 
 export function MetricSkeleton() {
   return (
@@ -27,5 +26,21 @@ export function MetricGridSkeleton({ count = 4 }: { count?: number }) {
         <MetricSkeleton key={i} />
       ))}
     </section>
+  );
+}
+
+/** Single line of text shimmer (for loading lists, paragraphs). */
+export function SkeletonText({
+  lines = 3, className = ""
+}: { lines?: number; className?: string }) {
+  return (
+    <div aria-hidden="true" className={`space-y-2 ${className}`}>
+      {Array.from({ length: lines }).map((_, i) => (
+        <SkeletonBlock
+          key={i}
+          className={`h-3 ${i === lines - 1 ? "w-2/3" : "w-full"}`}
+        />
+      ))}
+    </div>
   );
 }

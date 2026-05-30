@@ -3,7 +3,6 @@ package com.diploma.pharma.service;
 import com.diploma.pharma.dto.ProductBatchMetadataRequest;
 import com.diploma.pharma.dto.ProductBatchMetadataResponse;
 import com.diploma.pharma.entity.ProductBatchMetadata;
-import com.diploma.pharma.exception.DuplicateResourceException;
 import com.diploma.pharma.exception.ResourceNotFoundException;
 import com.diploma.pharma.repository.ProductBatchMetadataRepository;
 import java.util.List;
@@ -20,13 +19,16 @@ public class ProductBatchMetadataService {
         this.auditLogService = auditLogService;
     }
 
+    /** UPSERT по blockchainBatchId — INSERT если новой, UPDATE если уже есть. */
     @Transactional
     public ProductBatchMetadataResponse create(ProductBatchMetadataRequest request) {
-        if (repository.existsByBlockchainBatchId(request.blockchainBatchId())) {
-            throw new DuplicateResourceException("Batch metadata already exists");
-        }
-        ProductBatchMetadata metadata = new ProductBatchMetadata();
-        metadata.setBlockchainBatchId(request.blockchainBatchId());
+        ProductBatchMetadata metadata = repository.findByBlockchainBatchId(request.blockchainBatchId())
+                .orElseGet(() -> {
+                    ProductBatchMetadata fresh = new ProductBatchMetadata();
+                    fresh.setBlockchainBatchId(request.blockchainBatchId());
+                    return fresh;
+                });
+        boolean isNew = metadata.getId() == null;
         metadata.setBatchNumber(request.batchNumber());
         metadata.setManufacturerName(request.manufacturerName());
         metadata.setProductionDate(request.productionDate());
@@ -34,7 +36,10 @@ public class ProductBatchMetadataService {
         metadata.setMetadataHash(request.metadataHash());
         metadata.setTemperatureHash(request.temperatureHash());
         ProductBatchMetadata saved = repository.save(metadata);
-        auditLogService.record("system", "BATCH_METADATA_CREATED", "BATCH", request.blockchainBatchId().toString(), request.batchNumber());
+        auditLogService.record("system",
+                isNew ? "BATCH_METADATA_CREATED" : "BATCH_METADATA_UPDATED",
+                "BATCH", request.blockchainBatchId().toString(),
+                request.batchNumber());
         return toResponse(saved);
     }
 

@@ -11,6 +11,12 @@ import { useWallet } from "../context/WalletContext";
 export function WalletConnector() {
   const { address, roles, error, connect, loading } = useWallet();
 
+  const label = loading
+    ? "Подключение к MetaMask…"
+    : address
+      ? `MetaMask подключён, адрес ${formatAddress(address)}`
+      : "Подключить кошелёк MetaMask";
+
   return (
     <div className="flex min-w-0 max-w-[260px] flex-col items-end gap-1">
       <button
@@ -18,14 +24,19 @@ export function WalletConnector() {
         className="button-secondary"
         onClick={() => void connect()}
         disabled={loading}
+        aria-label={label}
+        aria-busy={loading || undefined}
       >
-        <Wallet size={18} />
+        <Wallet size={18} aria-hidden="true" />
         <span className="font-mono text-xs sm:text-sm">
-          {loading ? "…" : address ? formatAddress(address) : "Подключить MetaMask"}
+          {loading ? "…" : address ? formatAddress(address) : "Подключить"}
         </span>
       </button>
       {error && (
-        <span className="block max-w-full break-words text-right text-xs text-red-400">
+        <span
+          role="alert"
+          className="block max-w-full break-words text-right text-xs text-red-400"
+        >
           {error}
         </span>
       )}

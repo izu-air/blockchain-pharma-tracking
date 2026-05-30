@@ -1,4 +1,4 @@
-import type { AnalyticsSummary, ProductMetadata } from "../types/product";
+import type { AnalyticsDaily, AnalyticsSummary, ProductMetadata } from "../types/product";
 import { authHeaders } from "./auth";
 import { httpErrorMessage } from "./errors";
 
@@ -119,6 +119,40 @@ export async function registerUser(payload: { name: string; role: string; wallet
   return response.json();
 }
 
+export interface AdminUser {
+  id: number;
+  name: string;
+  role: string;
+  walletAddress: string;
+  createdAt: string;
+}
+
+export async function listUsers(): Promise<AdminUser[]> {
+  const response = await apiFetch("/users");
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Не удалось получить список пользователей."));
+  }
+  return response.json() as Promise<AdminUser[]>;
+}
+
+export async function updateUserRole(id: number, role: string, reason: string): Promise<AdminUser> {
+  const response = await apiFetch(`/users/${id}/role`, {
+    method: "PATCH",
+    body: JSON.stringify({ role, reason })
+  });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Не удалось изменить роль."));
+  }
+  return response.json() as Promise<AdminUser>;
+}
+
+export async function deleteUser(id: number): Promise<void> {
+  const response = await apiFetch(`/users/${id}`, { method: "DELETE" });
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Не удалось удалить пользователя."));
+  }
+}
+
 export async function saveMetadata(payload: {
   blockchainProductId: number;
   batchNumber: string;
@@ -202,4 +236,55 @@ export async function getAnalyticsSummary() {
     throw new Error(await readApiError(response, "Не удалось загрузить аналитику."));
   }
   return response.json() as Promise<AnalyticsSummary>;
+}
+
+export async function getAnalyticsDaily(days = 30) {
+  const response = await apiFetch(`/analytics/daily?days=${encodeURIComponent(days)}`);
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Не удалось загрузить дневную аналитику."));
+  }
+  return response.json() as Promise<AnalyticsDaily>;
+}
+
+export interface AuditLogEntry {
+  id: number;
+  actor: string;
+  action: string;
+  targetType: string;
+  targetId: string;
+  details: string;
+  createdAt: string;
+}
+
+export interface AuditLogPage {
+  content: AuditLogEntry[];
+  totalElements: number;
+  totalPages: number;
+  number: number;
+  size: number;
+}
+
+export interface AuditFilters {
+  page?: number;
+  size?: number;
+  action?: string;
+  wallet?: string;
+  from?: string;
+  to?: string;
+}
+
+export async function getAuditLogs(filters: AuditFilters = {}): Promise<AuditLogPage> {
+  const params = new URLSearchParams();
+  if (filters.page  != null) params.set("page",  String(filters.page));
+  if (filters.size  != null) params.set("size",  String(filters.size));
+  if (filters.action?.trim()) params.set("action", filters.action.trim());
+  if (filters.wallet?.trim()) params.set("wallet", filters.wallet.trim());
+  if (filters.from?.trim())   params.set("from",   filters.from.trim());
+  if (filters.to?.trim())     params.set("to",     filters.to.trim());
+
+  const response = await apiFetch(`/audit-logs?${params.toString()}`);
+  if (!response.ok) {
+    throw new Error(await readApiError(response, "Не удалось загрузить журнал аудита."));
+  }
+  return response.json() as Promise<AuditLogPage>;
 }

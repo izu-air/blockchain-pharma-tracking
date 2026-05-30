@@ -2,58 +2,338 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─── Base ────────────────────────────────────────────────────────────── */
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
-  background: radial-gradient(circle at top, #1e293b 0%, #020617 55%);
+  /* iOS safe-area inset baseline. Components add their own padding. */
+  padding-bottom: env(safe-area-inset-bottom);
+  background:
+    radial-gradient(1200px 600px at 8% -10%,   rgba(16, 185, 129, .14), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%,    rgba(56, 189, 248, .10), transparent 55%),
+    radial-gradient(700px 500px at 50% 110%,   rgba(124, 58, 237, .08), transparent 60%),
+    linear-gradient(180deg, #0a0f1c 0%, #04060e 100%);
+  background-attachment: fixed;
   color: #e2e8f0;
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-#root {
-  min-height: 100vh;
+#root { min-height: 100vh; }
+
+/* Subtle dot-grid texture overlay — adds tactile depth, ~5kb of CSS */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, rgba(255, 255, 255, .03) 1px, transparent 0);
+  background-size: 24px 24px;
+  z-index: 0;
+  mask-image: radial-gradient(ellipse at center, black 30%, transparent 90%);
 }
 
+/* Soft vignette at edges for premium feel */
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background: radial-gradient(ellipse 120% 80% at 50% 50%, transparent 50%, rgba(0,0,0,.35) 100%);
+}
+
+/* All app content sits above the overlays */
+#root > * { position: relative; z-index: 1; }
+
+/* Stronger global focus ring so keyboard users always see where they are. */
+:focus-visible {
+  outline: 2px solid #34d399;
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+/* Respect reduced-motion preferences. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ─── Typography helpers ─────────────────────────────────────────────── */
+.text-gradient {
+  background: linear-gradient(135deg, #6ee7b7 0%, #34d399 45%, #38bdf8 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+.text-gradient-warm {
+  background: linear-gradient(135deg, #fcd34d 0%, #f97316 50%, #ef4444 100%);
+  -webkit-background-clip: text;
+          background-clip: text;
+  color: transparent;
+}
+.eyebrow {
+  @apply text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/90;
+}
+
+/* ─── Layout tokens ──────────────────────────────────────────────────── */
 .bg-app {
-  background: linear-gradient(135deg, #0f172a 0%, #020617 60%);
+  background:
+    radial-gradient(1200px 600px at 8% -10%,   rgba(16, 185, 129, .14), transparent 60%),
+    radial-gradient(900px 600px at 100% 0%,    rgba(56, 189, 248, .10), transparent 55%),
+    radial-gradient(700px 500px at 50% 110%,   rgba(124, 58, 237, .08), transparent 60%),
+    linear-gradient(180deg, #0a0f1c 0%, #04060e 100%);
 }
 
+/* ─── Surface containers (cards / panels) ───────────────────────────── */
 .panel {
-  @apply rounded-2xl border border-white/10 bg-slate-900/60 p-5 shadow-lg shadow-slate-950/30 backdrop-blur;
+  @apply relative rounded-2xl border border-white/10 bg-slate-900/55 backdrop-blur;
+  /* Inner rim highlight (top) + soft outer drop shadow */
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .05),
+    0 1px 0 0 rgba(0, 0, 0, .2),
+    0 12px 28px -16px rgba(0, 0, 0, .55);
 }
-
 .panel-dark {
-  @apply rounded-2xl border border-white/10 bg-slate-950/70 p-4 shadow-lg shadow-slate-950/30 backdrop-blur;
+  @apply relative rounded-2xl border border-white/10 bg-slate-950/65 p-4 backdrop-blur;
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .04),
+    0 12px 28px -16px rgba(0, 0, 0, .55);
+}
+.surface {
+  @apply rounded-xl border border-white/10 bg-slate-950/50;
+}
+.surface-elevated {
+  @apply rounded-xl border border-white/10 bg-slate-900/80 shadow-md;
 }
 
+/* Card interactive variants — hover lift + emerald rim glow */
+.panel-interactive {
+  @apply transition duration-200 ease-out;
+}
+.panel-interactive:hover,
+.panel-interactive:focus-visible {
+  border-color: rgba(16, 185, 129, .35);
+  background: rgba(15, 23, 42, .75);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .06),
+    0 1px 0 0 rgba(0, 0, 0, .2),
+    0 18px 36px -18px rgba(16, 185, 129, .25);
+}
+
+/* Top accent strip — appears as a 2px gradient edge on the card. */
+.panel-accent-emerald::before,
+.panel-accent-sky::before,
+.panel-accent-violet::before,
+.panel-accent-amber::before,
+.panel-accent-rose::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 2px;
+  border-top-left-radius: inherit;
+  border-top-right-radius: inherit;
+  opacity: .9;
+}
+.panel-accent-emerald::before { background: linear-gradient(90deg, transparent, #34d399 50%, transparent); }
+.panel-accent-sky::before     { background: linear-gradient(90deg, transparent, #38bdf8 50%, transparent); }
+.panel-accent-violet::before  { background: linear-gradient(90deg, transparent, #a78bfa 50%, transparent); }
+.panel-accent-amber::before   { background: linear-gradient(90deg, transparent, #fbbf24 50%, transparent); }
+.panel-accent-rose::before    { background: linear-gradient(90deg, transparent, #fb7185 50%, transparent); }
+
+/* Brand mark — gradient + glow + breathing animation */
 .brand-icon {
-  @apply flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400;
+  @apply flex h-10 w-10 items-center justify-center rounded-xl text-emerald-50;
+  background: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .15),
+    0 0 0 1px rgba(16, 185, 129, .35),
+    0 0 24px rgba(16, 185, 129, .35),
+    0 4px 12px rgba(0, 0, 0, .4);
+  animation: breathe 4.5s ease-in-out infinite;
 }
 
+/* Icon halo (used by PageHeader / KpiCard) — colored gradient circle */
+.icon-halo {
+  @apply flex h-11 w-11 shrink-0 items-center justify-center rounded-xl;
+  background: linear-gradient(135deg, rgba(16, 185, 129, .25), rgba(6, 182, 212, .18));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, .08),
+    0 0 24px rgba(16, 185, 129, .15);
+  color: #6ee7b7;
+}
+.icon-halo-sky    { background: linear-gradient(135deg, rgba(56, 189, 248, .25), rgba(99, 102, 241, .18)); color: #7dd3fc; }
+.icon-halo-amber  { background: linear-gradient(135deg, rgba(251, 191, 36, .25), rgba(249, 115, 22, .18)); color: #fcd34d; }
+.icon-halo-rose   { background: linear-gradient(135deg, rgba(244, 114, 182, .25), rgba(239, 68, 68, .18)); color: #fda4af; }
+.icon-halo-violet { background: linear-gradient(135deg, rgba(167, 139, 250, .25), rgba(99, 102, 241, .18)); color: #c4b5fd; }
+
+/* ─── Form controls ──────────────────────────────────────────────────── */
 .input {
-  @apply w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/20;
+  @apply w-full rounded-xl border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100
+         outline-none transition placeholder:text-slate-500
+         hover:border-slate-600
+         focus:border-emerald-400 focus:ring-2 focus:ring-emerald-500/25
+         disabled:opacity-60 disabled:cursor-not-allowed;
+  min-height: 44px; /* WCAG / iOS touch target */
+}
+textarea.input { min-height: 96px; }
+
+.input-error {
+  @apply border-red-500/60 focus:border-red-400 focus:ring-red-500/25;
 }
 
+/* ─── Buttons ────────────────────────────────────────────────────────── */
+/* Primary — emerald gradient with subtle glow. */
 .button {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-medium text-slate-950 transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:bg-slate-600 disabled:text-slate-300;
+  @apply inline-flex select-none items-center justify-center gap-2 rounded-xl
+         px-4 py-2 text-sm font-semibold text-slate-950
+         transition duration-150 ease-out
+         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300/70
+         disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400
+         disabled:bg-none disabled:shadow-none;
+  background: linear-gradient(180deg, #34d399 0%, #10b981 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .25),
+    0 1px 2px 0 rgba(0, 0, 0, .25),
+    0 8px 24px -8px rgba(16, 185, 129, .45);
+  min-height: 44px;
 }
+.button:hover:not(:disabled) {
+  background: linear-gradient(180deg, #6ee7b7 0%, #34d399 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .3),
+    0 1px 2px 0 rgba(0, 0, 0, .3),
+    0 12px 32px -10px rgba(16, 185, 129, .65);
+  transform: translateY(-1px);
+}
+.button:active:not(:disabled) { transform: translateY(0) scale(.985); }
 
+/* Secondary — slate with inner highlight. */
 .button-secondary {
-  @apply inline-flex items-center justify-center gap-2 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-200 transition hover:border-slate-500 hover:bg-slate-800;
+  @apply inline-flex select-none items-center justify-center gap-2 rounded-xl
+         border border-slate-700 px-4 py-2 text-sm font-medium text-slate-100
+         transition duration-150 ease-out
+         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400/60
+         disabled:opacity-60 disabled:cursor-not-allowed;
+  background: linear-gradient(180deg, rgba(30, 41, 59, .9) 0%, rgba(15, 23, 42, .9) 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .05),
+    0 1px 2px 0 rgba(0, 0, 0, .2);
+  min-height: 44px;
 }
+.button-secondary:hover:not(:disabled) {
+  border-color: rgba(100, 116, 139, .8);
+  background: linear-gradient(180deg, rgba(51, 65, 85, .95) 0%, rgba(30, 41, 59, .95) 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .07),
+    0 6px 16px -8px rgba(0, 0, 0, .5);
+}
+.button-secondary:active:not(:disabled) { transform: translateY(0) scale(.985); }
 
+/* Danger — red gradient. */
+.button-danger {
+  @apply inline-flex select-none items-center justify-center gap-2 rounded-xl
+         px-4 py-2 text-sm font-semibold text-white
+         transition duration-150 ease-out
+         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-300/70
+         disabled:opacity-60 disabled:cursor-not-allowed;
+  background: linear-gradient(180deg, #f87171 0%, #ef4444 100%);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .2),
+    0 8px 24px -10px rgba(239, 68, 68, .55);
+  min-height: 44px;
+}
+.button-danger:hover:not(:disabled) {
+  background: linear-gradient(180deg, #fca5a5 0%, #f87171 100%);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255, 255, 255, .25),
+    0 12px 28px -10px rgba(239, 68, 68, .7);
+}
+.button-danger:active:not(:disabled) { transform: translateY(0) scale(.985); }
+
+/* Ghost — minimal icon button. */
 .button-ghost {
-  @apply inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 p-2 text-slate-300;
+  @apply inline-flex items-center justify-center rounded-lg border border-slate-700/60 bg-slate-900/50 p-2 text-slate-300
+         transition hover:border-slate-500 hover:bg-slate-800/80 hover:text-white;
+  min-height: 40px;
+  min-width:  40px;
 }
 
+/* Inline text link button. */
+.button-link {
+  @apply inline-flex items-center gap-1 text-sm font-medium text-emerald-300
+         underline-offset-4 transition hover:text-emerald-200 hover:underline;
+}
+
+/* ─── Navigation ─────────────────────────────────────────────────────── */
 .nav-link {
   @apply flex items-center gap-2 rounded-xl px-3 py-2 text-sm transition;
+  min-height: 40px;
 }
-
 .nav-link-active {
-  @apply bg-emerald-500/20 font-medium text-emerald-300;
+  @apply bg-emerald-500/15 font-medium text-emerald-200;
+  box-shadow: inset 0 0 0 1px rgba(16, 185, 129, .2);
+}
+.nav-link-idle   {
+  @apply text-slate-300 transition hover:bg-white/5 hover:text-white;
 }
 
-.nav-link-idle {
-  @apply text-slate-300 hover:bg-white/5;
+/* ─── Helper utilities ───────────────────────────────────────────────── */
+.kbd {
+  @apply rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 font-mono text-[11px] text-slate-300;
 }
+
+/* Skeleton shimmer */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(148, 163, 184, .07) 0%,
+    rgba(148, 163, 184, .18) 50%,
+    rgba(148, 163, 184, .07) 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.4s linear infinite;
+}
+
+/* Modal backdrop helper */
+.backdrop {
+  @apply fixed inset-0 z-40 bg-slate-950/70 backdrop-blur-sm animate-fade-in;
+  /* lock background scroll behind modal */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* iOS PWA safe-area helpers (notch / home-indicator) */
+.safe-top    { padding-top: env(safe-area-inset-top); }
+.safe-bottom { padding-bottom: max(env(safe-area-inset-bottom), 0.5rem); }
+
+/* Glass / blur surface for hero accents */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .04), rgba(255, 255, 255, .01));
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, .08);
+}
+
+/* Hero glow blobs — used decoratively in hero / empty-state. */
+.glow-blob {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(48px);
+  pointer-events: none;
+}
+.glow-blob-emerald { background: rgba(16, 185, 129, .22); }
+.glow-blob-sky     { background: rgba(56, 189, 248, .18); }
+.glow-blob-violet  { background: rgba(167, 139, 250, .18); }

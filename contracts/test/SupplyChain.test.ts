@@ -203,6 +203,23 @@ describe("SupplyChain", function () {
     ).to.be.reverted;
   });
 
+  it("rejects non-regulator recall / unrecall (REGULATOR_ROLE is gated)", async function () {
+    // Mirrors the matrix in docs/security.md: only REGULATOR_ROLE can flip
+    // batch.recalled.  Manufacturers, distributors, pharmacies and random
+    // attackers all hit the AccessControl revert before any state change.
+    const { supplyChain, manufacturer, distributor, pharmacy, attacker } =
+        await createBatchAndProduct();
+
+    for (const signer of [manufacturer, distributor, pharmacy, attacker]) {
+      await expect(
+        supplyChain.connect(signer).recallBatch(1, "x", op("nope-recall"))
+      ).to.be.reverted;
+      await expect(
+        supplyChain.connect(signer).unrecallBatch(1, "x", op("nope-unrecall"))
+      ).to.be.reverted;
+    }
+  });
+
   it("returns immutable product history", async function () {
     const { supplyChain, manufacturer, distributor } = await createBatchAndProduct();
 

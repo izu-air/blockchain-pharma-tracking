@@ -128,6 +128,26 @@ public class BlockchainEventIndexerService {
         }
     }
 
+    /** Сбрасывает чекпойнт индексатора. */
+    @org.springframework.transaction.annotation.Transactional
+    public long reset(Long toBlock) {
+        long target = (toBlock != null) ? Math.max(-1L, toBlock) : (startBlock - 1L);
+        IndexerState state = indexerStateRepository.findById(1L)
+                .orElseGet(() -> {
+                    IndexerState fresh = new IndexerState();
+                    fresh.setId(1L);
+                    return fresh;
+                });
+        long previous = state.getLastProcessedBlock();
+        state.setLastProcessedBlock(target);
+        indexerStateRepository.save(state);
+        LOG.warn("Indexer checkpoint reset: {} -> {} (start-block={})", previous, target, startBlock);
+        auditLogService.record("indexer", "INDEXER_RESET", "BLOCKCHAIN",
+                Long.toString(target),
+                "previous=" + previous + ", startBlock=" + startBlock);
+        return target;
+    }
+
     /**
      * Admin-triggered backfill of an explicit block range.  Useful when the
      * indexer was offline for a long time or to re-process a chunk after a
